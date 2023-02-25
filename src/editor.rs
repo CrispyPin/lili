@@ -21,7 +21,6 @@ struct Cursor {
 	column: usize,
 }
 
-// #[derive(Clone, Copy)]
 type Line = Range<usize>;
 
 impl Editor {
