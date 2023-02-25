@@ -57,6 +57,8 @@ impl Editor {
 				match key {
 					Key::Esc => self.quit = true,
 					Key::Char(char) => self.insert_char(char),
+					Key::Backspace => self.backspace(),
+					Key::Delete => self.delete(),
 					Key::Left => self.move_left(),
 					Key::Right => self.move_right(),
 					Key::Up => self.move_up(),
@@ -134,9 +136,23 @@ impl Editor {
 	}
 
 	fn insert_char(&mut self, ch: char) {
-		let index = self.current_line().start + self.cursor.column;
-		self.text.insert(index, ch);
-		self.move_right();
+		self.text.insert(self.index(), ch);
 		self.find_lines();
+		self.move_right();
+	}
+
+	fn backspace(&mut self) {
+		self.text.remove(self.index() - 1);
+		self.find_lines();
+		self.move_left();
+	}
+
+	fn delete(&mut self) {
+		self.text.remove(self.index());
+		self.find_lines();
+	}
+
+	fn index(&self) -> usize {
+		self.current_line().start + self.cursor.column
 	}
 }
