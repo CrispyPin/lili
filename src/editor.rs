@@ -1,6 +1,6 @@
 use std::{
-	fs,
-	io::{stdin, stdout, Write},
+	fs::{self, File},
+	io::{stdin, stdout, Stdout, Write},
 	ops::Range,
 	process::exit,
 };
@@ -8,17 +8,18 @@ use termion::{
 	clear, cursor,
 	event::{Event, Key},
 	input::TermRead,
-	raw::IntoRawMode,
+	raw::{IntoRawMode, RawTerminal},
 	terminal_size,
 };
 
 const TAB_SIZE: usize = 4;
 
-#[derive(Debug)]
 pub struct Editor {
 	text: String,
 	lines: Vec<Line>,
 	cursor: Cursor,
+	path: Option<String>,
+	term: RawTerminal<Stdout>,
 	quit: bool,
 }
 
@@ -34,6 +35,7 @@ type Line = Range<usize>;
 impl Editor {
 	pub fn new(path: Option<String>) -> Self {
 		let text = path
+			.as_ref()
 			.map(|path| {
 				fs::read_to_string(path).unwrap_or_else(|err| {
 					println!("Error: {err}");
@@ -42,27 +44,29 @@ impl Editor {
 			})
 			.unwrap_or_default();
 
+		let term = stdout().into_raw_mode().unwrap();
+
 		Editor {
 			text,
 			lines: Vec::new(),
 			cursor: Cursor { line: 0, column: 0 },
+			term,
+			path,
 			quit: false,
 		}
 	}
 
 	pub fn run(mut self) {
-		println!("{}", clear::All);
+		print!("{}", clear::All);
 		stdout().flush().unwrap();
-		let _t = stdout().into_raw_mode().unwrap();
+
+		self.find_lines();
 
 		while !self.quit {
-			self.find_lines();
 			self.draw();
 			self.input();
 		}
-		println!("{}", clear::All);
-		stdout().flush().unwrap();
-		// self.term.suspend_raw_mode().unwrap();
+		print!("{}", clear::All);
 	}
 
 	fn input(&mut self) {
@@ -78,9 +82,7 @@ impl Editor {
 					Key::Right => self.move_right(),
 					Key::Up => self.move_up(),
 					Key::Down => self.move_down(),
-					Key::F(1) => {
-						dbg!(&self);
-					}
+					Key::Ctrl('s') => self.save(),
 					_ => (),
 				}
 			}
@@ -237,5 +239,24 @@ impl Editor {
 		let preceding_chars = self.text[start..end].chars().count();
 		let preceding_tabs = self.text[start..end].chars().filter(|&c| c == '\t').count();
 		preceding_chars + preceding_tabs * (TAB_SIZE - 1)
+	}
+
+	fn save(&mut self) {
+		if self.path.is_none() {
+			self.path = Some(self.read_line("Save as: "));
+		}
+		let mut file = File::create(self.path.as_ref().unwrap()).unwrap();
+		file.write_all(self.text.as_bytes()).unwrap();
+	}
+
+	fn read_line(&self, prompt: &str) -> String {
+		// TODO: use events instead and allow cancelling with esc
+		self.term.suspend_raw_mode().unwrap();
+		print!("{}{prompt}", cursor::Goto(1, terminal_size().unwrap().1));
+		stdout().flush().unwrap();
+		let mut response = String::new();
+		stdin().read_line(&mut response).unwrap();
+		self.term.activate_raw_mode().unwrap();
+		response.trim_end().into()
 	}
 }
