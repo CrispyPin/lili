@@ -171,7 +171,8 @@ impl Editor {
 		print!("{}", clear::All);
 
 		let max_rows = terminal_size().unwrap().1 as usize - 1;
-		let visible_rows = self.scroll..(self.scroll + max_rows);
+		let end = (self.scroll + max_rows).min(self.lines.len());
+		let visible_rows = self.scroll..end;
 
 		for (line_index, line) in self.lines[visible_rows].iter().enumerate() {
 			let text = &self.text[line.clone()];
