@@ -17,6 +17,7 @@ const TAB_SIZE: usize = 4;
 pub struct Editor {
 	text: String,
 	lines: Vec<Line>,
+	scroll: usize,
 	cursor: Cursor,
 	path: Option<String>,
 	term: RawTerminal<Stdout>,
@@ -49,6 +50,7 @@ impl Editor {
 		Editor {
 			text,
 			lines: Vec::new(),
+			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
 			term,
 			path,
@@ -116,6 +118,9 @@ impl Editor {
 			self.cursor.line -= 1;
 			self.cursor.column = physical_column.min(self.current_line().len());
 			self.ensure_char_boundary();
+			if self.cursor.line < self.scroll {
+				self.scroll -= 1;
+			}
 		}
 	}
 
@@ -128,6 +133,9 @@ impl Editor {
 			self.cursor.line += 1;
 			self.cursor.column = physical_column.min(self.current_line().len());
 			self.ensure_char_boundary();
+			if self.cursor.line > (self.scroll + terminal_size().unwrap().1 as usize - 2) {
+				self.scroll += 1;
+			}
 		}
 	}
 
@@ -162,11 +170,14 @@ impl Editor {
 	fn draw(&self) {
 		print!("{}", clear::All);
 
-		for (row, line) in self.lines.iter().enumerate() {
+		let max_rows = terminal_size().unwrap().1 as usize - 1;
+		let visible_rows = self.scroll..(self.scroll + max_rows);
+
+		for (line_index, line) in self.lines[visible_rows].iter().enumerate() {
 			let text = &self.text[line.clone()];
 			print!(
 				"{}{}",
-				cursor::Goto(1, row as u16 + 1),
+				cursor::Goto(1, line_index as u16 + 1),
 				text.replace('\t', &" ".repeat(TAB_SIZE))
 			);
 		}
@@ -181,7 +192,7 @@ impl Editor {
 			"{}",
 			cursor::Goto(
 				self.physical_column() as u16 + 1,
-				self.cursor.line as u16 + 1
+				(self.cursor.line - self.scroll) as u16 + 1
 			)
 		);
 		stdout().flush().unwrap();
