@@ -14,6 +14,7 @@ use termion::{
 
 const TAB_SIZE: usize = 4;
 
+#[derive(Debug)]
 pub struct Editor {
 	text: String,
 	lines: Vec<Line>,
@@ -21,9 +22,11 @@ pub struct Editor {
 	quit: bool,
 }
 
+#[derive(Debug)]
 struct Cursor {
 	line: usize,
 	column: usize,
+	// target_column: usize,
 }
 
 type Line = Range<usize>;
@@ -75,6 +78,9 @@ impl Editor {
 					Key::Right => self.move_right(),
 					Key::Up => self.move_up(),
 					Key::Down => self.move_down(),
+					Key::F(1) => {
+						dbg!(&self);
+					}
 					_ => (),
 				}
 			}
@@ -83,7 +89,7 @@ impl Editor {
 
 	fn move_left(&mut self) {
 		if self.cursor.column > 0 {
-			self.cursor.column -= 1;
+			self.cursor.column = self.prev_char_index() - self.current_line().start;
 		} else if self.cursor.line > 0 {
 			self.cursor.line -= 1;
 			self.cursor.column = self.current_line().len();
@@ -92,7 +98,7 @@ impl Editor {
 
 	fn move_right(&mut self) {
 		if self.cursor.column < self.current_line().len() {
-			self.cursor.column += 1;
+			self.cursor.column = self.next_char_index() - self.current_line().start;
 		} else if self.cursor.line < self.lines.len() - 1 {
 			self.cursor.line += 1;
 			self.cursor.column = 0;
@@ -101,33 +107,53 @@ impl Editor {
 
 	fn move_up(&mut self) {
 		if self.cursor.line > 0 {
+			let physical_column = self.text
+				[self.current_line().start..(self.current_line().start + self.cursor.column)]
+				.chars()
+				.count();
 			self.cursor.line -= 1;
-			self.cursor.column = self.cursor.column.min(self.current_line().len());
+			self.cursor.column = physical_column.min(self.current_line().len());
+			self.ensure_char_boundary();
 		}
 	}
 
 	fn move_down(&mut self) {
 		if self.cursor.line < self.lines.len() - 1 {
+			let physical_column = self.text
+				[self.current_line().start..(self.current_line().start + self.cursor.column)]
+				.chars()
+				.count();
 			self.cursor.line += 1;
-			self.cursor.column = self.cursor.column.min(self.current_line().len());
+			self.cursor.column = physical_column.min(self.current_line().len());
+			self.ensure_char_boundary();
 		}
 	}
 
-	fn current_line(&self) -> Line {
-		self.lines.get(self.cursor.line).unwrap_or(&(0..0)).clone()
+	/// Moves cursor left until it is on a character (in case it was in the middle of a multi-byte character)
+	fn ensure_char_boundary(&mut self) {
+		while !self
+			.text
+			.is_char_boundary(self.current_line().start + self.cursor.column)
+		{
+			self.cursor.column -= 1;
+		}
+	}
+
+	fn current_line(&self) -> &Line {
+		self.lines.get(self.cursor.line).unwrap()
 	}
 
 	fn find_lines(&mut self) {
 		self.lines.clear();
 		let mut this_line = 0..0;
-		for (index, char) in self.text.chars().enumerate() {
+		for (index, char) in self.text.char_indices() {
 			if char == '\n' {
 				this_line.end = index;
 				self.lines.push(this_line.clone());
 				this_line.start = index + 1;
 			}
 		}
-		this_line.end = self.text.chars().count();
+		this_line.end = self.text.len();
 		self.lines.push(this_line);
 	}
 
@@ -143,7 +169,7 @@ impl Editor {
 			);
 		}
 		print!(
-			"{}{}, {}",
+			"{}({}, {})",
 			cursor::Goto(1, terminal_size().unwrap().1),
 			self.cursor.line,
 			self.cursor.column
@@ -161,34 +187,55 @@ impl Editor {
 
 	fn insert_char(&mut self, ch: char) {
 		// eprintln!("inserting {ch} at {}", self.index());
-		self.text.insert(self.index(), ch);
+		self.text.insert(self.char_index(), ch);
 		self.find_lines();
 		self.move_right();
 	}
 
 	fn backspace(&mut self) {
-		if self.index() > 0 {
-			self.text.remove(self.index() - 1);
+		if self.char_index() > 0 {
 			self.move_left();
+			self.text.remove(self.char_index());
 			self.find_lines();
 		}
 	}
 
 	fn delete(&mut self) {
-		if self.index() < self.text.len() {
-			self.text.remove(self.index());
+		if self.char_index() < self.text.len() {
+			self.text.remove(self.char_index());
 			self.find_lines();
 		}
 	}
 
-	fn index(&self) -> usize {
+	/// Byte position of current character. May be text.len if cursor is at the end of the file
+	fn char_index(&self) -> usize {
 		self.current_line().start + self.cursor.column
+	}
+
+	/// Byte position of next character.
+	/// Returns text.len if cursor is on the last character
+	fn next_char_index(&self) -> usize {
+		self.text[self.char_index()..]
+			.char_indices()
+			.nth(1)
+			.map_or(self.text.len(), |(byte, _char)| byte + self.char_index())
+	}
+
+	/// Byte position of preceding character.
+	/// Panics if cursor is at index 0
+	fn prev_char_index(&self) -> usize {
+		self.text[..self.char_index()]
+			.char_indices()
+			.last()
+			.map(|(byte, _char)| byte)
+			.unwrap()
 	}
 
 	fn physical_column(&self) -> usize {
 		let start = self.current_line().start;
-		let end = self.current_line().start + self.cursor.column;
+		let end = self.char_index();
+		let preceding_chars = self.text[start..end].chars().count();
 		let preceding_tabs = self.text[start..end].chars().filter(|&c| c == '\t').count();
-		self.cursor.column + preceding_tabs * (TAB_SIZE - 1)
+		preceding_chars + preceding_tabs * (TAB_SIZE - 1)
 	}
 }
