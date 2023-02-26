@@ -1,6 +1,8 @@
 use std::{
+	fs,
 	io::{stdin, stdout, Write},
 	ops::Range,
+	process::exit,
 };
 use termion::{
 	clear, cursor,
@@ -26,10 +28,18 @@ struct Cursor {
 type Line = Range<usize>;
 
 impl Editor {
-	pub fn new() -> Self {
+	pub fn new(path: Option<String>) -> Self {
+		let text = path
+			.map(|path| {
+				fs::read_to_string(path).unwrap_or_else(|err| {
+					println!("Error: {err}");
+					exit(1);
+				})
+			})
+			.unwrap_or_default();
+
 		Editor {
-			// text: String::new(),
-			text: include_str!("editor.rs").into(),
+			text,
 			lines: Vec::new(),
 			cursor: Cursor { line: 0, column: 0 },
 			quit: false,
