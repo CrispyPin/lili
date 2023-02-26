@@ -9,6 +9,7 @@ use termion::{
 	event::{Event, Key},
 	input::TermRead,
 	raw::IntoRawMode,
+	terminal_size,
 };
 
 const TAB_SIZE: usize = 4;
@@ -92,7 +93,7 @@ impl Editor {
 	fn move_right(&mut self) {
 		if self.cursor.column < self.current_line().len() {
 			self.cursor.column += 1;
-		} else if self.cursor.line < self.lines.len() {
+		} else if self.cursor.line < self.lines.len() - 1 {
 			self.cursor.line += 1;
 			self.cursor.column = 0;
 		}
@@ -106,7 +107,7 @@ impl Editor {
 	}
 
 	fn move_down(&mut self) {
-		if self.cursor.line < self.lines.len() {
+		if self.cursor.line < self.lines.len() - 1 {
 			self.cursor.line += 1;
 			self.cursor.column = self.cursor.column.min(self.current_line().len());
 		}
@@ -126,6 +127,8 @@ impl Editor {
 				this_line.start = index + 1;
 			}
 		}
+		this_line.end = self.text.chars().count();
+		self.lines.push(this_line);
 	}
 
 	fn draw(&self) {
@@ -140,6 +143,13 @@ impl Editor {
 			);
 		}
 		print!(
+			"{}{}, {}",
+			cursor::Goto(1, terminal_size().unwrap().1),
+			self.cursor.line,
+			self.cursor.column
+		);
+
+		print!(
 			"{}",
 			cursor::Goto(
 				self.physical_column() as u16 + 1,
@@ -150,20 +160,25 @@ impl Editor {
 	}
 
 	fn insert_char(&mut self, ch: char) {
+		// eprintln!("inserting {ch} at {}", self.index());
 		self.text.insert(self.index(), ch);
 		self.find_lines();
 		self.move_right();
 	}
 
 	fn backspace(&mut self) {
-		self.text.remove(self.index() - 1);
-		self.find_lines();
-		self.move_left();
+		if self.index() > 0 {
+			self.text.remove(self.index() - 1);
+			self.move_left();
+			self.find_lines();
+		}
 	}
 
 	fn delete(&mut self) {
-		self.text.remove(self.index());
-		self.find_lines();
+		if self.index() < self.text.len() {
+			self.text.remove(self.index());
+			self.find_lines();
+		}
 	}
 
 	fn index(&self) -> usize {
