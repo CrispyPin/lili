@@ -9,6 +9,8 @@ use termion::{
 	raw::IntoRawMode,
 };
 
+const TAB_SIZE: usize = 4;
+
 pub struct Editor {
 	text: String,
 	lines: Vec<Line>,
@@ -100,8 +102,8 @@ impl Editor {
 		}
 	}
 
-	fn current_line(&self) -> &Line {
-		self.lines.get(self.cursor.line).unwrap_or(&(0..0))
+	fn current_line(&self) -> Line {
+		self.lines.get(self.cursor.line).unwrap_or(&(0..0)).clone()
 	}
 
 	fn find_lines(&mut self) {
@@ -124,12 +126,15 @@ impl Editor {
 			print!(
 				"{}{}",
 				cursor::Goto(1, row as u16 + 1),
-				text.replace('\t', "    ")
+				text.replace('\t', &" ".repeat(TAB_SIZE))
 			);
 		}
 		print!(
 			"{}",
-			cursor::Goto(self.cursor.column as u16 + 1, self.cursor.line as u16 + 1)
+			cursor::Goto(
+				self.physical_column() as u16 + 1,
+				self.cursor.line as u16 + 1
+			)
 		);
 		stdout().flush().unwrap();
 	}
@@ -153,5 +158,12 @@ impl Editor {
 
 	fn index(&self) -> usize {
 		self.current_line().start + self.cursor.column
+	}
+
+	fn physical_column(&self) -> usize {
+		let start = self.current_line().start;
+		let end = self.current_line().start + self.cursor.column;
+		let preceding_tabs = self.text[start..end].chars().filter(|&c| c == '\t').count();
+		self.cursor.column + preceding_tabs * (TAB_SIZE - 1)
 	}
 }
