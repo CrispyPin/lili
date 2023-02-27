@@ -1,6 +1,7 @@
 use std::env;
 
 mod editor;
+mod util;
 use editor::Editor;
 
 fn main() {

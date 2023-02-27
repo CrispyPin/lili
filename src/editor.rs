@@ -12,6 +12,8 @@ use termion::{
 	terminal_size,
 };
 
+use crate::util::read_line;
+
 const TAB_SIZE: usize = 4;
 
 pub struct Editor {
@@ -20,7 +22,7 @@ pub struct Editor {
 	scroll: usize,
 	cursor: Cursor,
 	path: Option<String>,
-	term: RawTerminal<Stdout>,
+	_term: RawTerminal<Stdout>,
 	quit: bool,
 }
 
@@ -52,7 +54,7 @@ impl Editor {
 			lines: Vec::new(),
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
-			term,
+			_term: term,
 			path,
 			quit: false,
 		}
@@ -255,20 +257,12 @@ impl Editor {
 
 	fn save(&mut self) {
 		if self.path.is_none() {
-			self.path = Some(self.read_line("Save as: "));
+			self.path = read_line("Enter path: ");
+			if self.path.is_none() {
+				return;
+			}
 		}
 		let mut file = File::create(self.path.as_ref().unwrap()).unwrap();
 		file.write_all(self.text.as_bytes()).unwrap();
-	}
-
-	fn read_line(&self, prompt: &str) -> String {
-		// TODO: use events instead and allow cancelling with esc
-		self.term.suspend_raw_mode().unwrap();
-		print!("{}{prompt}", cursor::Goto(1, terminal_size().unwrap().1));
-		stdout().flush().unwrap();
-		let mut response = String::new();
-		stdin().read_line(&mut response).unwrap();
-		self.term.activate_raw_mode().unwrap();
-		response.trim_end().into()
 	}
 }
