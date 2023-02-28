@@ -5,7 +5,7 @@ use std::{
 };
 use termion::{
 	clear, color,
-	cursor::Goto,
+	cursor::{self, Goto},
 	event::{Event, Key},
 	input::TermRead,
 	raw::{IntoRawMode, RawTerminal},
@@ -50,8 +50,9 @@ impl Navigator {
 
 	fn draw(&self) {
 		print!(
-			"{}{}Open editors: {}",
+			"{}{}{}Open editors: {}",
 			clear::All,
+			cursor::Hide,
 			Goto(1, 1),
 			self.editors.len()
 		);
@@ -73,8 +74,25 @@ impl Navigator {
 				match key {
 					Key::Esc => self.quit(),
 					Key::Char('\n') => self.open_selected(),
+					Key::Ctrl('n') => self.new_editor(),
+					Key::Up => self.nav_up(),
+					Key::Down => self.nav_down(),
 					_ => (),
 				}
+			}
+		}
+	}
+
+	fn nav_up(&mut self) {
+		if self.selected > Some(0) {
+			self.selected = Some(self.selected.unwrap() - 1);
+		}
+	}
+
+	fn nav_down(&mut self) {
+		if let Some(index) = self.selected.as_mut() {
+			if *index < self.editors.len() - 1 {
+				*index += 1;
 			}
 		}
 	}
@@ -85,8 +103,14 @@ impl Navigator {
 		}
 	}
 
+	fn new_editor(&mut self) {
+		self.selected = Some(self.editors.len());
+		self.editors.push(Editor::new(None));
+		self.open_selected();
+	}
+
 	fn quit(&self) {
-		print!("{}", clear::All);
+		print!("{}{}", clear::All, cursor::Show);
 		exit(0);
 	}
 }

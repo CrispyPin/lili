@@ -108,11 +108,12 @@ impl Editor {
 		}
 		self.status_line();
 		print!(
-			"{}",
+			"{}{}",
 			cursor::Goto(
 				self.physical_column() as u16 + 1,
 				(self.cursor.line - self.scroll) as u16 + 1
-			)
+			),
+			cursor::Show
 		);
 		stdout().flush().unwrap();
 	}
