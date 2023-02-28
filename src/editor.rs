@@ -117,7 +117,7 @@ impl Editor {
 				print!("{}", text.replace('\t', &" ".repeat(TAB_SIZE)));
 			} else {
 				let mut in_selection = false;
-				for (i, char) in text.chars().enumerate() {
+				for (i, char) in text.char_indices() {
 					let char_i = line.start + i;
 					if char_i >= selection.start && char_i <= selection.end && !in_selection {
 						color_selection();
