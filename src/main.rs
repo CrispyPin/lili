@@ -16,7 +16,7 @@ mod util;
 use editor::Editor;
 
 fn main() {
-	Navigator::new(env::args().nth(1)).run();
+	Navigator::new().run();
 }
 
 struct Navigator {
@@ -27,13 +27,13 @@ struct Navigator {
 }
 
 impl Navigator {
-	fn new(immediate_file: Option<String>) -> Self {
+	fn new() -> Self {
 		let term = stdout().into_raw_mode().unwrap();
-		let editors = vec![Editor::new(immediate_file)];
+		let editors = env::args().skip(1).map(Editor::new).collect();
 		Self {
 			editors,
 			selected: Some(0),
-			path: String::new(), // TODO
+			path: String::new(),
 			_term: term,
 		}
 	}
@@ -105,7 +105,7 @@ impl Navigator {
 
 	fn new_editor(&mut self) {
 		self.selected = Some(self.editors.len());
-		self.editors.push(Editor::new(None));
+		self.editors.push(Editor::new_empty());
 		self.open_selected();
 	}
 

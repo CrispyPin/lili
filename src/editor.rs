@@ -3,6 +3,7 @@ use std::{
 	io::{stdin, stdout, Write},
 	ops::Range,
 	process::exit,
+	vec,
 };
 use termion::{
 	clear, cursor,
@@ -34,27 +35,29 @@ struct Cursor {
 type Line = Range<usize>;
 
 impl Editor {
-	pub fn new(path: Option<String>) -> Self {
-		let text = path
-			.as_ref()
-			.map(|path| {
-				fs::read_to_string(path).unwrap_or_else(|err| {
-					println!("Error: {err}");
-					exit(1);
-				})
-			})
-			.unwrap_or_default();
-
+	pub fn new(path: String) -> Self {
+		let text = fs::read_to_string(&path).unwrap_or_default();
 		let mut this = Editor {
 			text,
 			lines: Vec::new(),
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
-			path,
+			path: Some(path),
 			active: false,
 		};
 		this.find_lines();
 		this
+	}
+
+	pub fn new_empty() -> Self {
+		Editor {
+			text: String::new(),
+			lines: vec![0..0],
+			scroll: 0,
+			cursor: Cursor { line: 0, column: 0 },
+			path: None,
+			active: false,
+		}
 	}
 
 	pub fn name(&self) -> &str {
