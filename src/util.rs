@@ -1,5 +1,4 @@
 use std::io::{stdin, stdout, Write};
-
 use termion::{
 	cursor,
 	event::{Event, Key},
@@ -22,9 +21,7 @@ pub fn read_line(prompt: &str) -> Option<String> {
 				Key::Char('\n') => break,
 				Key::Char(ch) => response.push(ch),
 				Key::Backspace => {
-					if !response.is_empty() {
-						response.remove(response.len() - 1);
-					}
+					response.pop();
 					print!("{start_pos}{:width$}", " ");
 				}
 				Key::Esc => return None,

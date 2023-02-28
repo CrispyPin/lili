@@ -1,6 +1,6 @@
 use std::{
 	fs::{self, File},
-	io::{stdin, stdout, Stdout, Write},
+	io::{stdin, stdout, Write},
 	ops::Range,
 	process::exit,
 };
@@ -8,7 +8,6 @@ use termion::{
 	clear, cursor,
 	event::{Event, Key},
 	input::TermRead,
-	raw::{IntoRawMode, RawTerminal},
 	terminal_size,
 };
 
@@ -22,8 +21,7 @@ pub struct Editor {
 	scroll: usize,
 	cursor: Cursor,
 	path: Option<String>,
-	_term: RawTerminal<Stdout>,
-	quit: bool,
+	pub quit: bool,
 }
 
 #[derive(Debug)]
@@ -47,33 +45,23 @@ impl Editor {
 			})
 			.unwrap_or_default();
 
-		let term = stdout().into_raw_mode().unwrap();
-
-		Editor {
+		let mut this = Editor {
 			text,
 			lines: Vec::new(),
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
-			_term: term,
 			path,
 			quit: false,
-		}
+		};
+		this.find_lines();
+		this
 	}
 
-	pub fn run(mut self) {
-		print!("{}", clear::All);
-		stdout().flush().unwrap();
-
-		self.find_lines();
-
-		while !self.quit {
-			self.draw();
-			self.input();
-		}
-		print!("{}", clear::All);
+	pub fn name(&self) -> &str {
+		self.path.as_ref().map_or("untitled", |s| &s)
 	}
 
-	fn input(&mut self) {
+	pub fn input(&mut self) {
 		for event in stdin().events().take(1).flatten() {
 			// dbg!(&event);
 			if let Event::Key(key) = event {
@@ -86,6 +74,8 @@ impl Editor {
 					Key::Right => self.move_right(),
 					Key::Up => self.move_up(),
 					Key::Down => self.move_down(),
+					Key::Home => self.move_home(),
+					Key::End => self.move_end(),
 					Key::Ctrl('s') => self.save(),
 					_ => (),
 				}
@@ -141,6 +131,15 @@ impl Editor {
 		}
 	}
 
+	fn move_home(&mut self) {
+		self.cursor.column = 0;
+	}
+
+	fn move_end(&mut self) {
+		self.cursor.column = self.current_line().len();
+		self.ensure_char_boundary();
+	}
+
 	/// Moves cursor left until it is on a character (in case it was in the middle of a multi-byte character)
 	fn ensure_char_boundary(&mut self) {
 		while !self
@@ -169,7 +168,7 @@ impl Editor {
 		self.lines.push(this_line);
 	}
 
-	fn draw(&self) {
+	pub fn draw(&self) {
 		print!("{}", clear::All);
 
 		let max_rows = terminal_size().unwrap().1 as usize - 1;
