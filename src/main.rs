@@ -21,7 +21,6 @@ fn main() {
 
 struct Navigator {
 	editors: Vec<Editor>,
-	active: Option<usize>,
 	selected: Option<usize>,
 	path: String,
 	_term: RawTerminal<Stdout>,
@@ -33,8 +32,7 @@ impl Navigator {
 		let editors = vec![Editor::new(immediate_file)];
 		Self {
 			editors,
-			active: Some(0),
-			selected: None,
+			selected: Some(0),
 			path: String::new(), // TODO
 			_term: term,
 		}
@@ -45,23 +43,18 @@ impl Navigator {
 		stdout().flush().unwrap();
 
 		loop {
-			if let Some(index) = self.active {
-				self.editors[index].draw();
-				self.editors[index].input();
-
-				if self.editors[index].quit {
-					self.selected = self.active;
-					self.active = None;
-				}
-			} else {
-				self.draw();
-				self.input();
-			}
+			self.draw();
+			self.input();
 		}
 	}
 
 	fn draw(&self) {
-		print!("{}{}Open editors: {}", clear::All, Goto(1,1), self.editors.len());
+		print!(
+			"{}{}Open editors: {}",
+			clear::All,
+			Goto(1, 1),
+			self.editors.len()
+		);
 
 		for (index, editor) in self.editors.iter().enumerate() {
 			if Some(index) == self.selected {
@@ -79,9 +72,16 @@ impl Navigator {
 			if let Event::Key(key) = event {
 				match key {
 					Key::Esc => self.quit(),
+					Key::Char('\n') => self.open_selected(),
 					_ => (),
 				}
 			}
+		}
+	}
+
+	fn open_selected(&mut self) {
+		if let Some(index) = self.selected {
+			self.editors[index].open();
 		}
 	}
 

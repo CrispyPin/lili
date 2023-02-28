@@ -21,7 +21,7 @@ pub struct Editor {
 	scroll: usize,
 	cursor: Cursor,
 	path: Option<String>,
-	pub quit: bool,
+	active: bool,
 }
 
 #[derive(Debug)]
@@ -51,22 +51,30 @@ impl Editor {
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
 			path,
-			quit: false,
+			active: false,
 		};
 		this.find_lines();
 		this
 	}
 
 	pub fn name(&self) -> &str {
-		self.path.as_ref().map_or("untitled", |s| &s)
+		self.path.as_ref().map_or("untitled", |s| s)
 	}
 
-	pub fn input(&mut self) {
+	pub fn open(&mut self) {
+		self.active = true;
+
+		while self.active {
+			self.draw();
+			self.input();
+		}
+	}
+
+	fn input(&mut self) {
 		for event in stdin().events().take(1).flatten() {
-			// dbg!(&event);
 			if let Event::Key(key) = event {
 				match key {
-					Key::Esc => self.quit = true,
+					Key::Esc => self.active = false,
 					Key::Char(char) => self.insert_char(char),
 					Key::Backspace => self.backspace(),
 					Key::Delete => self.delete(),
@@ -81,6 +89,42 @@ impl Editor {
 				}
 			}
 		}
+	}
+
+	fn draw(&self) {
+		print!("{}", clear::All);
+
+		let max_rows = terminal_size().unwrap().1 as usize - 1;
+		let end = (self.scroll + max_rows).min(self.lines.len());
+		let visible_rows = self.scroll..end;
+
+		for (line_index, line) in self.lines[visible_rows].iter().enumerate() {
+			let text = &self.text[line.clone()];
+			print!(
+				"{}{}",
+				cursor::Goto(1, line_index as u16 + 1),
+				text.replace('\t', &" ".repeat(TAB_SIZE))
+			);
+		}
+		self.status_line();
+		print!(
+			"{}",
+			cursor::Goto(
+				self.physical_column() as u16 + 1,
+				(self.cursor.line - self.scroll) as u16 + 1
+			)
+		);
+		stdout().flush().unwrap();
+	}
+
+	fn status_line(&self) {
+		print!(
+			"{}({}, {}) {}",
+			cursor::Goto(1, terminal_size().unwrap().1),
+			self.cursor.line,
+			self.physical_column(),
+			self.name(),
+		);
 	}
 
 	fn move_left(&mut self) {
@@ -166,38 +210,6 @@ impl Editor {
 		}
 		this_line.end = self.text.len();
 		self.lines.push(this_line);
-	}
-
-	pub fn draw(&self) {
-		print!("{}", clear::All);
-
-		let max_rows = terminal_size().unwrap().1 as usize - 1;
-		let end = (self.scroll + max_rows).min(self.lines.len());
-		let visible_rows = self.scroll..end;
-
-		for (line_index, line) in self.lines[visible_rows].iter().enumerate() {
-			let text = &self.text[line.clone()];
-			print!(
-				"{}{}",
-				cursor::Goto(1, line_index as u16 + 1),
-				text.replace('\t', &" ".repeat(TAB_SIZE))
-			);
-		}
-		print!(
-			"{}({}, {})",
-			cursor::Goto(1, terminal_size().unwrap().1),
-			self.cursor.line,
-			self.cursor.column
-		);
-
-		print!(
-			"{}",
-			cursor::Goto(
-				self.physical_column() as u16 + 1,
-				(self.cursor.line - self.scroll) as u16 + 1
-			)
-		);
-		stdout().flush().unwrap();
 	}
 
 	fn insert_char(&mut self, ch: char) {
