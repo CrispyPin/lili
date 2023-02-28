@@ -2,11 +2,10 @@ use std::{
 	fs::{self, File},
 	io::{stdin, stdout, Write},
 	ops::Range,
-	process::exit,
 	vec,
 };
 use termion::{
-	clear, cursor,
+	clear, color, cursor,
 	event::{Event, Key},
 	input::TermRead,
 	terminal_size,
@@ -21,6 +20,7 @@ pub struct Editor {
 	lines: Vec<Line>,
 	scroll: usize,
 	cursor: Cursor,
+	marker: Option<usize>,
 	path: Option<String>,
 	active: bool,
 }
@@ -42,6 +42,7 @@ impl Editor {
 			lines: Vec::new(),
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
+			marker: None,
 			path: Some(path),
 			active: false,
 		};
@@ -55,6 +56,7 @@ impl Editor {
 			lines: vec![0..0],
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
+			marker: None,
 			path: None,
 			active: false,
 		}
@@ -88,6 +90,7 @@ impl Editor {
 					Key::Home => self.move_home(),
 					Key::End => self.move_end(),
 					Key::Ctrl('s') => self.save(),
+					Key::Ctrl('p') => self.toggle_marker(),
 					_ => (),
 				}
 			}
@@ -101,13 +104,36 @@ impl Editor {
 		let end = (self.scroll + max_rows).min(self.lines.len());
 		let visible_rows = self.scroll..end;
 
+		let cursor = self.char_index();
+		let marker = self.marker.unwrap_or(0);
+		let selection = (marker.min(cursor))..(marker.max(cursor));
+
 		for (line_index, line) in self.lines[visible_rows].iter().enumerate() {
 			let text = &self.text[line.clone()];
-			print!(
-				"{}{}",
-				cursor::Goto(1, line_index as u16 + 1),
-				text.replace('\t', &" ".repeat(TAB_SIZE))
-			);
+
+			print!("{}", cursor::Goto(1, line_index as u16 + 1));
+
+			if self.marker.is_none() {
+				print!("{}", text.replace('\t', &" ".repeat(TAB_SIZE)));
+			} else {
+				let mut in_selection = false;
+				for (i, char) in text.chars().enumerate() {
+					let char_i = line.start + i;
+					if char_i >= selection.start && char_i <= selection.end && !in_selection {
+						color_selection();
+						in_selection = true;
+					} else if char_i > selection.end && in_selection {
+						color_reset();
+						in_selection = false;
+					}
+					if char == '\t' {
+						print!("{:1$}", " ", TAB_SIZE);
+					} else {
+						print!("{}", char);
+					}
+				}
+				color_reset();
+			}
 		}
 		self.status_line();
 		print!(
@@ -186,6 +212,14 @@ impl Editor {
 	fn move_end(&mut self) {
 		self.cursor.column = self.current_line().len();
 		self.ensure_char_boundary();
+	}
+
+	fn toggle_marker(&mut self) {
+		if self.marker.is_some() {
+			self.marker = None;
+		} else {
+			self.marker = Some(self.char_index());
+		}
 	}
 
 	/// Moves cursor left until it is on a character (in case it was in the middle of a multi-byte character)
@@ -280,4 +314,16 @@ impl Editor {
 		let mut file = File::create(self.path.as_ref().unwrap()).unwrap();
 		file.write_all(self.text.as_bytes()).unwrap();
 	}
+}
+
+fn color_selection() {
+	print!(
+		"{}{}",
+		color::Fg(color::Black),
+		color::Bg(color::LightBlack)
+	);
+}
+
+fn color_reset() {
+	print!("{}{}", color::Fg(color::Reset), color::Bg(color::Reset));
 }
