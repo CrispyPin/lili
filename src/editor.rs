@@ -25,6 +25,7 @@ pub struct Editor {
 	clipboard: Clipboard,
 	path: Option<String>,
 	active: bool,
+	unsaved_changes: bool,
 }
 
 #[derive(Debug)]
@@ -48,6 +49,7 @@ impl Editor {
 			clipboard,
 			path: Some(path),
 			active: false,
+			unsaved_changes: false,
 		};
 		this.find_lines();
 		this
@@ -63,11 +65,16 @@ impl Editor {
 			clipboard,
 			path: None,
 			active: false,
+			unsaved_changes: true,
 		}
 	}
 
 	pub fn name(&self) -> &str {
 		self.path.as_ref().map_or("untitled", |s| s)
+	}
+
+	pub fn has_unsaved_changes(&self) -> bool {
+		self.unsaved_changes
 	}
 
 	pub fn open(&mut self) {
@@ -258,6 +265,7 @@ impl Editor {
 	}
 
 	fn insert_char(&mut self, ch: char) {
+		self.unsaved_changes = true;
 		// eprintln!("inserting {ch} at {}", self.index());
 		self.text.insert(self.char_index(), ch);
 		self.find_lines();
@@ -305,6 +313,7 @@ impl Editor {
 	}
 
 	fn paste(&mut self) {
+		self.unsaved_changes = true;
 		let cursor = self.char_index();
 		self.text.insert_str(cursor, &self.clipboard.get());
 		self.find_lines();
@@ -352,6 +361,7 @@ impl Editor {
 		}
 		let mut file = File::create(self.path.as_ref().unwrap()).unwrap();
 		file.write_all(self.text.as_bytes()).unwrap();
+		self.unsaved_changes = false;
 	}
 }
 

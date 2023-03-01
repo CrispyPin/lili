@@ -70,7 +70,12 @@ impl Navigator {
 			if Some(index) == self.selected {
 				print!("{}{}", color::Fg(color::Black), color::Bg(color::White));
 			}
-			print!("{}{}", Goto(2, index as u16 + 2), editor.name());
+			print!(
+				"{}{}{}",
+				Goto(2, index as u16 + 2),
+				editor.has_unsaved_changes().then_some("*").unwrap_or(" "),
+				editor.name()
+			);
 			print!("{}{}", color::Fg(color::Reset), color::Bg(color::Reset));
 		}
 
