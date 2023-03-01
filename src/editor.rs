@@ -11,6 +11,7 @@ use termion::{
 	terminal_size,
 };
 
+use crate::clipboard::Clipboard;
 use crate::util::read_line;
 
 const TAB_SIZE: usize = 4;
@@ -21,6 +22,7 @@ pub struct Editor {
 	scroll: usize,
 	cursor: Cursor,
 	marker: Option<usize>,
+	clipboard: Clipboard,
 	path: Option<String>,
 	active: bool,
 }
@@ -35,7 +37,7 @@ struct Cursor {
 type Line = Range<usize>;
 
 impl Editor {
-	pub fn new(path: String) -> Self {
+	pub fn new(clipboard: Clipboard, path: String) -> Self {
 		let text = fs::read_to_string(&path).unwrap_or_default();
 		let mut this = Editor {
 			text,
@@ -43,6 +45,7 @@ impl Editor {
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
 			marker: None,
+			clipboard,
 			path: Some(path),
 			active: false,
 		};
@@ -50,13 +53,14 @@ impl Editor {
 		this
 	}
 
-	pub fn new_empty() -> Self {
+	pub fn new_empty(clipboard: Clipboard) -> Self {
 		Editor {
 			text: String::new(),
 			lines: vec![0..0],
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
 			marker: None,
+			clipboard,
 			path: None,
 			active: false,
 		}
@@ -91,6 +95,9 @@ impl Editor {
 					Key::End => self.move_end(),
 					Key::Ctrl('s') => self.save(),
 					Key::Ctrl('p') => self.toggle_marker(),
+					Key::Ctrl('c') => self.copy(),
+					Key::Ctrl('x') => self.cut(),
+					Key::Ctrl('v') => self.paste(),
 					_ => (),
 				}
 			}
@@ -129,7 +136,7 @@ impl Editor {
 					if char == '\t' {
 						print!("{:1$}", " ", TAB_SIZE);
 					} else {
-						print!("{}", char);
+						print!("{char}");
 					}
 				}
 				color_reset();
@@ -270,6 +277,38 @@ impl Editor {
 			self.text.remove(self.char_index());
 			self.find_lines();
 		}
+	}
+
+	fn copy(&mut self) {
+		let cursor = self.char_index();
+		let range = if let Some(marker) = self.marker {
+			marker.min(cursor)..marker.max(cursor)
+		} else {
+			self.current_line().clone()
+		};
+		let text = self.text[range].to_owned();
+		self.clipboard.set(text);
+	}
+
+	fn cut(&mut self) {
+		let cursor = self.char_index();
+		let range = if let Some(marker) = self.marker {
+			marker.min(cursor)..marker.max(cursor)
+		} else {
+			self.current_line().clone()
+		};
+		let text = self.text[range.clone()].to_owned();
+		self.clipboard.set(text);
+		self.text = self.text[..range.start].to_owned() + &self.text[range.end..];
+		self.find_lines();
+		self.marker = None;
+	}
+
+	fn paste(&mut self) {
+		let cursor = self.char_index();
+		self.text.insert_str(cursor, &self.clipboard.get());
+		self.find_lines();
+		// TODO move cursor to end
 	}
 
 	/// Byte position of current character. May be text.len if cursor is at the end of the file

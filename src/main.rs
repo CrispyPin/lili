@@ -11,8 +11,10 @@ use termion::{
 	raw::{IntoRawMode, RawTerminal},
 };
 
+mod clipboard;
 mod editor;
 mod util;
+use clipboard::Clipboard;
 use editor::Editor;
 
 fn main() {
@@ -22,18 +24,25 @@ fn main() {
 struct Navigator {
 	editors: Vec<Editor>,
 	selected: Option<usize>,
-	path: String,
+	clipboard: Clipboard,
 	_term: RawTerminal<Stdout>,
 }
 
 impl Navigator {
 	fn new() -> Self {
 		let term = stdout().into_raw_mode().unwrap();
-		let editors = env::args().skip(1).map(Editor::new).collect();
+		let clipboard = Clipboard::new();
+		let mut editors: Vec<Editor> = env::args()
+			.skip(1)
+			.map(|path| Editor::new(clipboard.clone(), path))
+			.collect();
+		if editors.is_empty() {
+			editors.push(Editor::new_empty(clipboard.clone()));
+		}
 		Self {
 			editors,
 			selected: Some(0),
-			path: String::new(),
+			clipboard,
 			_term: term,
 		}
 	}
@@ -72,7 +81,7 @@ impl Navigator {
 		for event in stdin().events().take(1).flatten() {
 			if let Event::Key(key) = event {
 				match key {
-					Key::Esc => self.quit(),
+					Key::Char('q') => self.quit(),
 					Key::Char('\n') => self.open_selected(),
 					Key::Ctrl('n') => self.new_editor(),
 					Key::Up => self.nav_up(),
@@ -105,7 +114,7 @@ impl Navigator {
 
 	fn new_editor(&mut self) {
 		self.selected = Some(self.editors.len());
-		self.editors.push(Editor::new_empty());
+		self.editors.push(Editor::new_empty(self.clipboard.clone()));
 		self.open_selected();
 	}
 
