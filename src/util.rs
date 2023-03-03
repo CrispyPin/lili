@@ -1,4 +1,7 @@
-use std::io::{stdin, stdout, Write};
+use std::{
+	io::{stdin, stdout, Write},
+	ops::Range,
+};
 use termion::{
 	cursor,
 	event::{Event, Key},
@@ -32,4 +35,14 @@ pub fn read_line(prompt: &str) -> Option<String> {
 		stdout().flush().unwrap();
 	}
 	Some(response.trim().into())
+}
+
+pub trait RangeConverter {
+	fn as_inclusive(&self) -> Range<usize>;
+}
+
+impl RangeConverter for Range<usize> {
+	fn as_inclusive(&self) -> Range<usize> {
+		self.start..(self.end + 1)
+	}
 }

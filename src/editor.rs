@@ -11,8 +11,8 @@ use termion::{
 	terminal_size,
 };
 
-use crate::clipboard::Clipboard;
 use crate::util::read_line;
+use crate::{clipboard::Clipboard, util::RangeConverter};
 
 const TAB_SIZE: usize = 4;
 
@@ -228,6 +228,15 @@ impl Editor {
 		self.ensure_char_boundary();
 	}
 
+	fn move_to_byte(&mut self, pos: usize) {
+		for (line_index, line) in self.lines.iter().enumerate() {
+			if (line.start..=line.end).contains(&pos) {
+				self.cursor.line = line_index;
+				self.cursor.column = pos - line.start;
+			}
+		}
+	}
+
 	fn toggle_marker(&mut self) {
 		if self.marker.is_some() {
 			self.marker = None;
@@ -290,34 +299,38 @@ impl Editor {
 	fn copy(&mut self) {
 		let cursor = self.char_index();
 		let range = if let Some(marker) = self.marker {
-			marker.min(cursor)..marker.max(cursor)
+			marker.min(cursor)..(marker.max(cursor) + 1)
 		} else {
-			self.current_line().clone()
+			self.current_line().as_inclusive()
 		};
 		let text = self.text[range].to_owned();
 		self.clipboard.set(text);
+		self.marker = None;
 	}
 
 	fn cut(&mut self) {
 		let cursor = self.char_index();
 		let range = if let Some(marker) = self.marker {
-			marker.min(cursor)..marker.max(cursor)
+			marker.min(cursor)..(marker.max(cursor) + 1)
 		} else {
-			self.current_line().clone()
+			self.current_line().as_inclusive()
 		};
 		let text = self.text[range.clone()].to_owned();
 		self.clipboard.set(text);
 		self.text = self.text[..range.start].to_owned() + &self.text[range.end..];
 		self.find_lines();
+		self.move_to_byte(range.start);
 		self.marker = None;
 	}
 
 	fn paste(&mut self) {
 		self.unsaved_changes = true;
 		let cursor = self.char_index();
-		self.text.insert_str(cursor, &self.clipboard.get());
+		let new_text = self.clipboard.get();
+		let end_pos = cursor + new_text.len();
+		self.text.insert_str(cursor, &new_text);
 		self.find_lines();
-		// TODO move cursor to end
+		self.move_to_byte(end_pos);
 	}
 
 	/// Byte position of current character. May be text.len if cursor is at the end of the file
