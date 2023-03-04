@@ -1,37 +1,36 @@
-use std::{
-	io::{stdin, stdout, Write},
-	ops::Range,
-};
-use termion::{
+use crossterm::{
 	cursor,
-	event::{Event, Key},
-	input::TermRead,
-	terminal_size,
+	event::{self, Event, KeyCode},
+	queue, terminal,
+};
+use std::{
+	io::{stdout, Write},
+	ops::Range,
 };
 
 pub fn read_line(prompt: &str) -> Option<String> {
 	let mut response = String::new();
-	let size = terminal_size().unwrap();
-	let start_pos = cursor::Goto(1, size.1);
-	let width = size.0 as usize;
+	let size = terminal::size().unwrap();
+	let start_pos = cursor::MoveTo(0, size.1);
 
-	print!("{start_pos}{prompt}{response}",);
+	queue!(stdout(), start_pos).unwrap();
+	print!("{prompt}");
 	stdout().flush().unwrap();
 
-	for event in stdin().events() {
-		if let Ok(Event::Key(key)) = event {
-			match key {
-				Key::Char('\n') => break,
-				Key::Char(ch) => response.push(ch),
-				Key::Backspace => {
+	loop {
+		if let Ok(Event::Key(event)) = event::read() {
+			match event.code {
+				KeyCode::Enter => break,
+				KeyCode::Char(ch) => response.push(ch),
+				KeyCode::Backspace => {
 					response.pop();
-					print!("{start_pos}{:width$}", " ");
 				}
-				Key::Esc => return None,
+				KeyCode::Esc => return None,
 				_ => (),
 			}
 		}
-		print!("{start_pos}{prompt}{response}",);
+		queue!(stdout(), start_pos).unwrap();
+		print!("{prompt}{response} ");
 		stdout().flush().unwrap();
 	}
 	Some(response.trim().into())

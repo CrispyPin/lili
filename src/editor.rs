@@ -1,14 +1,15 @@
+use crossterm::{
+	cursor::{self, MoveTo},
+	event::{self, Event, KeyCode, KeyModifiers},
+	queue,
+	style::{Color, Colors, ResetColor, SetColors},
+	terminal::{self, Clear, ClearType},
+};
 use std::{
 	fs::{self, File},
-	io::{stdin, stdout, Write},
+	io::{stdout, Write},
 	ops::Range,
 	vec,
-};
-use termion::{
-	clear, color, cursor,
-	event::{Event, Key},
-	input::TermRead,
-	terminal_size,
 };
 
 use crate::util::read_line;
@@ -87,34 +88,39 @@ impl Editor {
 	}
 
 	fn input(&mut self) {
-		for event in stdin().events().take(1).flatten() {
-			if let Event::Key(key) = event {
-				match key {
-					Key::Esc => self.active = false,
-					Key::Char(char) => self.insert_char(char),
-					Key::Backspace => self.backspace(),
-					Key::Delete => self.delete(),
-					Key::Left => self.move_left(),
-					Key::Right => self.move_right(),
-					Key::Up => self.move_up(),
-					Key::Down => self.move_down(),
-					Key::Home => self.move_home(),
-					Key::End => self.move_end(),
-					Key::Ctrl('s') => self.save(),
-					Key::Ctrl('p') => self.toggle_marker(),
-					Key::Ctrl('c') => self.copy(),
-					Key::Ctrl('x') => self.cut(),
-					Key::Ctrl('v') => self.paste(),
+		match event::read() {
+			Ok(Event::Key(event)) => match event.modifiers {
+				KeyModifiers::NONE => match event.code {
+					KeyCode::Esc => self.active = false,
+					KeyCode::Char(ch) => self.insert_char(ch),
+					KeyCode::Backspace => self.backspace(),
+					KeyCode::Delete => self.delete(),
+					KeyCode::Left => self.move_left(),
+					KeyCode::Right => self.move_right(),
+					KeyCode::Up => self.move_up(),
+					KeyCode::Down => self.move_down(),
+					KeyCode::Home => self.move_home(),
+					KeyCode::End => self.move_end(),
 					_ => (),
-				}
-			}
+				},
+				KeyModifiers::CONTROL => match event.code {
+					KeyCode::Char('s') => self.save(),
+					KeyCode::Char('p') => self.toggle_marker(),
+					KeyCode::Char('c') => self.copy(),
+					KeyCode::Char('x') => self.cut(),
+					KeyCode::Char('v') => self.paste(),
+					_ => (),
+				},
+				_ => (),
+			},
+			_ => (),
 		}
 	}
 
 	fn draw(&self) {
-		print!("{}", clear::All);
+		queue!(stdout(), Clear(ClearType::All)).unwrap();
 
-		let max_rows = terminal_size().unwrap().1 as usize - 1;
+		let max_rows = terminal::size().unwrap().1 as usize - 1;
 		let end = (self.scroll + max_rows).min(self.lines.len());
 		let visible_rows = self.scroll..end;
 
@@ -125,7 +131,7 @@ impl Editor {
 		for (line_index, line) in self.lines[visible_rows].iter().enumerate() {
 			let text = &self.text[line.clone()];
 
-			print!("{}", cursor::Goto(1, line_index as u16 + 1));
+			queue!(stdout(), MoveTo(0, line_index as u16)).unwrap();
 
 			if self.marker.is_none() {
 				print!("{}", text.replace('\t', &" ".repeat(TAB_SIZE)));
@@ -150,21 +156,22 @@ impl Editor {
 			}
 		}
 		self.status_line();
-		print!(
-			"{}{}",
-			cursor::Goto(
-				self.physical_column() as u16 + 1,
-				(self.cursor.line - self.scroll) as u16 + 1
+		queue!(
+			stdout(),
+			MoveTo(
+				self.physical_column() as u16,
+				(self.cursor.line - self.scroll) as u16
 			),
 			cursor::Show
-		);
+		)
+		.unwrap();
 		stdout().flush().unwrap();
 	}
 
 	fn status_line(&self) {
+		queue!(stdout(), MoveTo(0, terminal::size().unwrap().1)).unwrap();
 		print!(
-			"{}({}, {}) {}",
-			cursor::Goto(1, terminal_size().unwrap().1),
+			"({},{}) {}",
 			self.cursor.line,
 			self.physical_column(),
 			self.name(),
@@ -213,7 +220,7 @@ impl Editor {
 			self.cursor.line += 1;
 			self.cursor.column = physical_column.min(self.current_line().len());
 			self.ensure_char_boundary();
-			if self.cursor.line > (self.scroll + terminal_size().unwrap().1 as usize - 2) {
+			if self.cursor.line > (self.scroll + terminal::size().unwrap().1 as usize - 2) {
 				self.scroll += 1;
 			}
 		}
@@ -379,13 +386,9 @@ impl Editor {
 }
 
 fn color_selection() {
-	print!(
-		"{}{}",
-		color::Fg(color::Black),
-		color::Bg(color::LightBlack)
-	);
+	queue!(stdout(), SetColors(Colors::new(Color::Black, Color::White))).unwrap();
 }
 
 fn color_reset() {
-	print!("{}{}", color::Fg(color::Reset), color::Bg(color::Reset));
+	queue!(stdout(), ResetColor).unwrap();
 }

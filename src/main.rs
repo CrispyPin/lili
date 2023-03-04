@@ -1,14 +1,17 @@
+use crossterm::{
+	cursor::{self, MoveTo},
+	event::{self, Event, KeyCode, KeyModifiers},
+	execute, queue,
+	style::{Color, Colors, ResetColor, SetColors},
+	terminal::{
+		disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
+		LeaveAlternateScreen,
+	},
+};
 use std::{
 	env,
-	io::{stdin, stdout, Stdout, Write},
+	io::{stdout, Write},
 	process::exit,
-};
-use termion::{
-	clear, color,
-	cursor::{self, Goto},
-	event::{Event, Key},
-	input::TermRead,
-	raw::{IntoRawMode, RawTerminal},
 };
 
 mod clipboard;
@@ -25,12 +28,10 @@ struct Navigator {
 	editors: Vec<Editor>,
 	selected: Option<usize>,
 	clipboard: Clipboard,
-	_term: RawTerminal<Stdout>,
 }
 
 impl Navigator {
 	fn new() -> Self {
-		let term = stdout().into_raw_mode().unwrap();
 		let clipboard = Clipboard::new();
 		let mut editors: Vec<Editor> = env::args()
 			.skip(1)
@@ -43,13 +44,12 @@ impl Navigator {
 			editors,
 			selected: Some(0),
 			clipboard,
-			_term: term,
 		}
 	}
 
 	fn run(mut self) {
-		print!("{}", clear::All);
-		stdout().flush().unwrap();
+		execute!(stdout(), EnterAlternateScreen, Clear(ClearType::All)).unwrap();
+		enable_raw_mode().unwrap();
 
 		loop {
 			self.draw();
@@ -58,41 +58,38 @@ impl Navigator {
 	}
 
 	fn draw(&self) {
-		print!(
-			"{}{}{}Open editors: {}",
-			clear::All,
-			cursor::Hide,
-			Goto(1, 1),
-			self.editors.len()
-		);
+		queue!(stdout(), Clear(ClearType::All), cursor::Hide, MoveTo(0, 0)).unwrap();
+		print!("Open editors: {}", self.editors.len());
 
 		for (index, editor) in self.editors.iter().enumerate() {
 			if Some(index) == self.selected {
-				print!("{}{}", color::Fg(color::Black), color::Bg(color::White));
+				queue!(stdout(), SetColors(Colors::new(Color::Black, Color::White))).unwrap();
 			}
+			queue!(stdout(), MoveTo(1, index as u16 + 1)).unwrap();
 			print!(
-				"{}{}{}",
-				Goto(2, index as u16 + 2),
+				"{}{}",
 				editor.has_unsaved_changes().then_some("*").unwrap_or(" "),
 				editor.name()
 			);
-			print!("{}{}", color::Fg(color::Reset), color::Bg(color::Reset));
+			queue!(stdout(), ResetColor).unwrap();
 		}
 
 		stdout().flush().unwrap();
 	}
 
 	fn input(&mut self) {
-		for event in stdin().events().take(1).flatten() {
-			if let Event::Key(key) = event {
-				match key {
-					Key::Char('q') => self.quit(),
-					Key::Char('\n') => self.open_selected(),
-					Key::Ctrl('n') => self.new_editor(),
-					Key::Up => self.nav_up(),
-					Key::Down => self.nav_down(),
-					_ => (),
+		if let Ok(Event::Key(event)) = event::read() {
+			match event.code {
+				KeyCode::Char('q') => self.quit(),
+				KeyCode::Up => self.nav_up(),
+				KeyCode::Down => self.nav_down(),
+				KeyCode::Enter => self.open_selected(),
+				KeyCode::Char('n') => {
+					if event.modifiers == KeyModifiers::CONTROL {
+						self.new_editor();
+					}
 				}
+				_ => (),
 			}
 		}
 	}
@@ -124,7 +121,8 @@ impl Navigator {
 	}
 
 	fn quit(&self) {
-		print!("{}{}", clear::All, cursor::Show);
+		disable_raw_mode().unwrap();
+		execute!(stdout(), LeaveAlternateScreen, cursor::Show).unwrap();
 		exit(0);
 	}
 }
