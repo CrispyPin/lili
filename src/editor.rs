@@ -1,6 +1,6 @@
 use crossterm::{
 	cursor::{self, MoveTo},
-	event::{self, Event, KeyCode, KeyModifiers},
+	event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
 	queue,
 	style::{Color, Colors, ResetColor, SetColors},
 	terminal::{self, Clear, ClearType},
@@ -89,31 +89,59 @@ impl Editor {
 
 	fn input(&mut self) {
 		match event::read() {
-			Ok(Event::Key(event)) => match event.modifiers {
-				KeyModifiers::NONE => match event.code {
-					KeyCode::Esc => self.active = false,
-					KeyCode::Char(ch) => self.insert_char(ch),
-					KeyCode::Backspace => self.backspace(),
-					KeyCode::Delete => self.delete(),
-					KeyCode::Left => self.move_left(),
-					KeyCode::Right => self.move_right(),
-					KeyCode::Up => self.move_up(),
-					KeyCode::Down => self.move_down(),
-					KeyCode::Home => self.move_home(),
-					KeyCode::End => self.move_end(),
+			Ok(Event::Key(event)) => {
+				if self.input_movement(&event) {
+					return;
+				}
+				match event.modifiers {
+					KeyModifiers::NONE => match event.code {
+						KeyCode::Esc => self.active = false,
+						KeyCode::Char(ch) => self.insert_char(ch),
+						KeyCode::Enter => self.insert_char('\n'),
+						KeyCode::Backspace => self.backspace(),
+						KeyCode::Delete => self.delete(),
+						_ => (),
+					},
+					KeyModifiers::CONTROL => match event.code {
+						KeyCode::Char('s') => self.save(),
+						KeyCode::Char('c') => self.copy(),
+						KeyCode::Char('x') => self.cut(),
+						KeyCode::Char('v') => self.paste(),
+						_ => (),
+					},
 					_ => (),
-				},
-				KeyModifiers::CONTROL => match event.code {
-					KeyCode::Char('s') => self.save(),
-					KeyCode::Char('p') => self.toggle_marker(),
-					KeyCode::Char('c') => self.copy(),
-					KeyCode::Char('x') => self.cut(),
-					KeyCode::Char('v') => self.paste(),
-					_ => (),
-				},
-				_ => (),
-			},
+				}
+			}
 			_ => (),
+		}
+	}
+
+	/// Cursor movement logic, returns true if cursor moved (so consider the event consumed in that case)
+	fn input_movement(&mut self, event: &KeyEvent) -> bool {
+		if let KeyCode::Left
+		| KeyCode::Right
+		| KeyCode::Up
+		| KeyCode::Down
+		| KeyCode::Home
+		| KeyCode::End = event.code
+		{
+			if event.modifiers.contains(KeyModifiers::SHIFT) {
+				self.set_marker();
+			} else {
+				self.marker = None;
+			}
+			match event.code {
+				KeyCode::Left => self.move_left(),
+				KeyCode::Right => self.move_right(),
+				KeyCode::Up => self.move_up(),
+				KeyCode::Down => self.move_down(),
+				KeyCode::Home => self.move_home(),
+				KeyCode::End => self.move_end(),
+				_ => (),
+			}
+			true
+		} else {
+			false
 		}
 	}
 
@@ -244,10 +272,8 @@ impl Editor {
 		}
 	}
 
-	fn toggle_marker(&mut self) {
-		if self.marker.is_some() {
-			self.marker = None;
-		} else {
+	fn set_marker(&mut self) {
+		if self.marker.is_none() {
 			self.marker = Some(self.char_index());
 		}
 	}
@@ -282,7 +308,6 @@ impl Editor {
 
 	fn insert_char(&mut self, ch: char) {
 		self.unsaved_changes = true;
-		// eprintln!("inserting {ch} at {}", self.index());
 		self.text.insert(self.char_index(), ch);
 		self.find_lines();
 		self.move_right();
