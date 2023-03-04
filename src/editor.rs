@@ -12,8 +12,8 @@ use std::{
 	vec,
 };
 
+use crate::clipboard::Clipboard;
 use crate::util::read_line;
-use crate::{clipboard::Clipboard, util::RangeConverter};
 
 const TAB_SIZE: usize = 4;
 
@@ -328,30 +328,41 @@ impl Editor {
 		}
 	}
 
-	fn copy(&mut self) {
+	fn selection(&self) -> Option<Range<usize>> {
 		let cursor = self.char_index();
-		let range = if let Some(marker) = self.marker {
-			marker.min(cursor)..(marker.max(cursor) + 1)
+		if let Some(marker) = self.marker {
+			Some(marker.min(cursor)..(marker.max(cursor)))
 		} else {
-			self.current_line().as_inclusive()
-		};
-		let text = self.text[range].to_owned();
+			None
+		}
+	}
+
+	fn selection_or_line(&self) -> Range<usize> {
+		self.selection().unwrap_or(self.current_line().clone())
+	}
+
+	fn copy(&mut self) {
+		let range = self.selection_or_line();
+		let mut text = self.text[range].to_owned();
+		if self.marker.is_none() {
+			text += "\n";
+		}
 		self.clipboard.set(text);
-		self.marker = None;
 	}
 
 	fn cut(&mut self) {
-		let cursor = self.char_index();
-		let range = if let Some(marker) = self.marker {
-			marker.min(cursor)..(marker.max(cursor) + 1)
-		} else {
-			self.current_line().as_inclusive()
-		};
-		let text = self.text[range.clone()].to_owned();
+		let range = self.selection_or_line();
+		let start = range.start;
+		let mut end = range.end;
+		let mut text = self.text[range].to_owned();
+		if self.marker.is_none() {
+			text += "\n";
+			end += 1;
+		}
 		self.clipboard.set(text);
-		self.text = self.text[..range.start].to_owned() + &self.text[range.end..];
+		self.text = self.text[..start].to_owned() + &self.text[end..];
 		self.find_lines();
-		self.move_to_byte(range.start);
+		self.move_to_byte(start);
 		self.marker = None;
 	}
 
@@ -363,6 +374,7 @@ impl Editor {
 		self.text.insert_str(cursor, &new_text);
 		self.find_lines();
 		self.move_to_byte(end_pos);
+		self.marker = None;
 	}
 
 	/// Byte position of current character. May be text.len if cursor is at the end of the file

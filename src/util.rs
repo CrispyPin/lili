@@ -3,10 +3,7 @@ use crossterm::{
 	event::{self, Event, KeyCode},
 	queue, terminal,
 };
-use std::{
-	io::{stdout, Write},
-	ops::Range,
-};
+use std::io::{stdout, Write};
 
 pub fn read_line(prompt: &str) -> Option<String> {
 	let mut response = String::new();
@@ -34,14 +31,4 @@ pub fn read_line(prompt: &str) -> Option<String> {
 		stdout().flush().unwrap();
 	}
 	Some(response.trim().into())
-}
-
-pub trait RangeConverter {
-	fn as_inclusive(&self) -> Range<usize>;
-}
-
-impl RangeConverter for Range<usize> {
-	fn as_inclusive(&self) -> Range<usize> {
-		self.start..(self.end + 1)
-	}
 }
