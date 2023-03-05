@@ -9,6 +9,7 @@ use std::{
 	fs::{self, File},
 	io::{stdout, Write},
 	ops::Range,
+	path::PathBuf,
 	vec,
 };
 
@@ -24,7 +25,7 @@ pub struct Editor {
 	cursor: Cursor,
 	marker: Option<usize>,
 	clipboard: Clipboard,
-	path: Option<String>,
+	path: Option<PathBuf>,
 	active: bool,
 	unsaved_changes: bool,
 }
@@ -39,9 +40,9 @@ struct Cursor {
 type Line = Range<usize>;
 
 impl Editor {
-	pub fn new(clipboard: Clipboard, path: String) -> Self {
-		let text = fs::read_to_string(&path).unwrap_or_default();
-		let mut this = Editor {
+	pub fn open_file(clipboard: Clipboard, path: PathBuf) -> Option<Self> {
+		let text = fs::read_to_string(&path).ok()?;
+		Some(Editor {
 			text,
 			lines: Vec::new(),
 			scroll: 0,
@@ -51,9 +52,7 @@ impl Editor {
 			path: Some(path),
 			active: false,
 			unsaved_changes: false,
-		};
-		this.find_lines();
-		this
+		})
 	}
 
 	pub fn new_empty(clipboard: Clipboard) -> Self {
@@ -70,16 +69,36 @@ impl Editor {
 		}
 	}
 
-	pub fn name(&self) -> &str {
-		self.path.as_ref().map_or("untitled", |s| s)
+	pub fn new_named(clipboard: Clipboard, path: PathBuf) -> Self {
+		Editor {
+			text: String::new(),
+			lines: vec![0..0],
+			scroll: 0,
+			cursor: Cursor { line: 0, column: 0 },
+			marker: None,
+			clipboard,
+			path: Some(path),
+			active: false,
+			unsaved_changes: true,
+		}
+	}
+
+	pub fn name(&self) -> String {
+		if let Some(path) = &self.path {
+			if let Some(name) = path.file_name() {
+				return name.to_string_lossy().to_string();
+			}
+		}
+		"untitled".into()
 	}
 
 	pub fn has_unsaved_changes(&self) -> bool {
 		self.unsaved_changes
 	}
 
-	pub fn open(&mut self) {
+	pub fn enter(&mut self) {
 		self.active = true;
+		self.find_lines();
 
 		while self.active {
 			self.draw();
@@ -88,31 +107,28 @@ impl Editor {
 	}
 
 	fn input(&mut self) {
-		match event::read() {
-			Ok(Event::Key(event)) => {
-				if self.input_movement(&event) {
-					return;
-				}
-				match event.modifiers {
-					KeyModifiers::NONE => match event.code {
-						KeyCode::Esc => self.active = false,
-						KeyCode::Char(ch) => self.insert_char(ch),
-						KeyCode::Enter => self.insert_char('\n'),
-						KeyCode::Backspace => self.backspace(),
-						KeyCode::Delete => self.delete(),
-						_ => (),
-					},
-					KeyModifiers::CONTROL => match event.code {
-						KeyCode::Char('s') => self.save(),
-						KeyCode::Char('c') => self.copy(),
-						KeyCode::Char('x') => self.cut(),
-						KeyCode::Char('v') => self.paste(),
-						_ => (),
-					},
-					_ => (),
-				}
+		if let Ok(Event::Key(event)) = event::read() {
+			if self.input_movement(&event) {
+				return;
 			}
-			_ => (),
+			match event.modifiers {
+				KeyModifiers::NONE => match event.code {
+					KeyCode::Esc => self.active = false,
+					KeyCode::Char(ch) => self.insert_char(ch),
+					KeyCode::Enter => self.insert_char('\n'),
+					KeyCode::Backspace => self.backspace(),
+					KeyCode::Delete => self.delete(),
+					_ => (),
+				},
+				KeyModifiers::CONTROL => match event.code {
+					KeyCode::Char('s') => self.save(),
+					KeyCode::Char('c') => self.copy(),
+					KeyCode::Char('x') => self.cut(),
+					KeyCode::Char('v') => self.paste(),
+					_ => (),
+				},
+				_ => (),
+			}
 		}
 	}
 
@@ -330,11 +346,8 @@ impl Editor {
 
 	fn selection(&self) -> Option<Range<usize>> {
 		let cursor = self.char_index();
-		if let Some(marker) = self.marker {
-			Some(marker.min(cursor)..(marker.max(cursor)))
-		} else {
-			None
-		}
+		self.marker
+			.map(|marker| marker.min(cursor)..(marker.max(cursor)))
 	}
 
 	fn selection_or_line(&self) -> Range<usize> {
@@ -359,6 +372,7 @@ impl Editor {
 			text += "\n";
 			end += 1;
 		}
+		end = end.min(self.text.len());
 		self.clipboard.set(text);
 		self.text = self.text[..start].to_owned() + &self.text[end..];
 		self.find_lines();
@@ -411,7 +425,7 @@ impl Editor {
 
 	fn save(&mut self) {
 		if self.path.is_none() {
-			self.path = read_line("Enter path: ");
+			self.path = read_line("Enter path: ").map(PathBuf::from);
 			if self.path.is_none() {
 				return;
 			}
