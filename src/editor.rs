@@ -116,8 +116,13 @@ impl Editor {
 					KeyCode::Esc => self.active = false,
 					KeyCode::Char(ch) => self.insert_char(ch),
 					KeyCode::Enter => self.insert_char('\n'),
+					KeyCode::Tab => self.insert_char('\t'),
 					KeyCode::Backspace => self.backspace(),
 					KeyCode::Delete => self.delete(),
+					_ => (),
+				},
+				KeyModifiers::SHIFT => match event.code {
+					KeyCode::Char(ch) => self.insert_char(ch.to_ascii_uppercase()),
 					_ => (),
 				},
 				KeyModifiers::CONTROL => match event.code {

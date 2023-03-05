@@ -52,7 +52,7 @@ impl Navigator {
 					editors.push(editor);
 				}
 			} else {
-				editors.push(Editor::new_named(clipboard.clone(), arg))
+				editors.push(Editor::new_named(clipboard.clone(), arg));
 			}
 		}
 		if args.is_empty() {
@@ -157,7 +157,7 @@ impl Navigator {
 			let i = self.selected - self.editors.len();
 			if i == 0 {
 				if let Some(parent) = self.path.parent() {
-					self.path = parent.to_owned()
+					self.path = parent.to_owned();
 				}
 			} else {
 				let path = &self.files[i];
@@ -170,7 +170,7 @@ impl Navigator {
 					{
 						self.selected = self.editors.len();
 						self.editors.push(editor);
-						self.open_selected()
+						self.open_selected();
 					}
 				}
 			}
