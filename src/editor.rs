@@ -144,6 +144,8 @@ impl Editor {
 		| KeyCode::Up
 		| KeyCode::Down
 		| KeyCode::Home
+		| KeyCode::PageUp
+		| KeyCode::PageDown
 		| KeyCode::End = event.code
 		{
 			if event.modifiers.contains(KeyModifiers::SHIFT) {
@@ -151,11 +153,14 @@ impl Editor {
 			} else {
 				self.marker = None;
 			}
+			let height = terminal::size().unwrap().1 as usize;
 			match event.code {
 				KeyCode::Left => self.move_left(),
 				KeyCode::Right => self.move_right(),
-				KeyCode::Up => self.move_up(),
-				KeyCode::Down => self.move_down(),
+				KeyCode::Up => self.move_up(1),
+				KeyCode::Down => self.move_down(1),
+				KeyCode::PageUp => self.move_up(height),
+				KeyCode::PageDown => self.move_down(height),
 				KeyCode::Home => self.move_home(),
 				KeyCode::End => self.move_end(),
 				_ => (),
@@ -234,6 +239,7 @@ impl Editor {
 			self.cursor.line -= 1;
 			self.cursor.column = self.current_line().len();
 		}
+		self.scroll_to_cursor()
 	}
 
 	fn move_right(&mut self) {
@@ -243,36 +249,43 @@ impl Editor {
 			self.cursor.line += 1;
 			self.cursor.column = 0;
 		}
+		self.scroll_to_cursor()
 	}
 
-	fn move_up(&mut self) {
-		if self.cursor.line > 0 {
-			let physical_column = self.text
-				[self.current_line().start..(self.current_line().start + self.cursor.column)]
-				.chars()
-				.count();
-			self.cursor.line -= 1;
-			self.cursor.column = physical_column.min(self.current_line().len());
-			self.ensure_char_boundary();
-			if self.cursor.line < self.scroll {
-				self.scroll -= 1;
-			}
-		}
+	fn move_up(&mut self, lines: usize) {
+		let physical_column = self.text
+			[self.current_line().start..(self.current_line().start + self.cursor.column)]
+			.chars()
+			.count();
+		self.cursor.line = self.cursor.line.saturating_sub(lines);
+		self.cursor.column = physical_column.min(self.current_line().len());
+		self.ensure_char_boundary();
+		self.scroll_to_cursor();
 	}
 
-	fn move_down(&mut self) {
-		if self.cursor.line < self.lines.len() - 1 {
-			let physical_column = self.text
-				[self.current_line().start..(self.current_line().start + self.cursor.column)]
-				.chars()
-				.count();
-			self.cursor.line += 1;
-			self.cursor.column = physical_column.min(self.current_line().len());
-			self.ensure_char_boundary();
-			if self.cursor.line > (self.scroll + terminal::size().unwrap().1 as usize - 2) {
-				self.scroll += 1;
-			}
-		}
+	fn move_down(&mut self, lines: usize) {
+		let physical_column = self.text
+			[self.current_line().start..(self.current_line().start + self.cursor.column)]
+			.chars()
+			.count();
+		self.cursor.line = (self.cursor.line + lines).min(self.lines.len() - 1);
+		self.cursor.column = physical_column.min(self.current_line().len());
+		self.ensure_char_boundary();
+		self.scroll_to_cursor();
+	}
+
+	fn scroll_to_cursor(&mut self) {
+		// while self.cursor.line < self.scroll {
+		// 	self.scroll -= 1;
+		// }
+		// while self.cursor.line > (self.scroll + terminal::size().unwrap().1 as usize - 2) {
+		// 	self.scroll += 1;
+		// }
+		self.scroll = self.scroll.min(self.cursor.line);
+		let height = terminal::size().unwrap().1 as usize - 2;
+		self.scroll = self
+			.scroll
+			.max(self.scroll + self.cursor.line.saturating_sub(self.scroll + height));
 	}
 
 	fn move_home(&mut self) {
