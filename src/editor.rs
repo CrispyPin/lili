@@ -6,6 +6,7 @@ use crossterm::{
 	terminal::{self, Clear, ClearType},
 };
 use std::{
+	env,
 	fs::{self, File},
 	io::{stdout, Write},
 	ops::Range,
@@ -443,7 +444,7 @@ impl Editor {
 
 	fn save(&mut self) {
 		if self.path.is_none() {
-			self.path = read_line("Enter path: ").map(PathBuf::from);
+			self.path = read_line("Enter path: ").map(|s| env::current_dir().unwrap().join(s));
 			if self.path.is_none() {
 				return;
 			}

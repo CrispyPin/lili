@@ -31,6 +31,7 @@ struct Navigator {
 	files: Vec<PathBuf>,
 	selected: usize,
 	path: PathBuf,
+	init_path: PathBuf,
 	immediate_open: bool,
 }
 
@@ -64,6 +65,7 @@ impl Navigator {
 			editors,
 			selected: 0,
 			files: Vec::new(),
+			init_path: path.clone(),
 			path,
 			immediate_open,
 		}
@@ -131,7 +133,7 @@ impl Navigator {
 				KeyCode::Up => self.nav_up(),
 				KeyCode::Down => self.nav_down(),
 				KeyCode::Enter => self.enter(),
-				KeyCode::Home => self.path = env::current_dir().unwrap(),
+				KeyCode::Home => self.path = self.init_path.clone(),
 				KeyCode::Char('n') => {
 					if event.modifiers == KeyModifiers::CONTROL {
 						self.new_editor();
@@ -158,11 +160,13 @@ impl Navigator {
 			if i == 0 {
 				if let Some(parent) = self.path.parent() {
 					self.path = parent.to_owned();
+					env::set_current_dir(&self.path).unwrap();
 				}
 			} else {
 				let path = &self.files[i];
 				if path.is_dir() {
 					self.path = self.path.join(path);
+					env::set_current_dir(&self.path).unwrap();
 					self.selected = self.editors.len();
 				} else if path.is_file() {
 					if let Some(editor) =
