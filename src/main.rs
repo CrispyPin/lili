@@ -169,13 +169,24 @@ impl Navigator {
 					env::set_current_dir(&self.path).unwrap();
 					self.selected = self.editors.len();
 				} else if path.is_file() {
-					if let Some(editor) =
-						Editor::open_file(self.clipboard.clone(), path.canonicalize().unwrap())
-					{
-						self.selected = self.editors.len();
-						self.editors.push(editor);
-						self.open_selected();
+					let path = path.canonicalize().unwrap();
+					self.selected = self.editors.len();
+					for (i, editor) in self.editors.iter().enumerate() {
+						if editor.path() == Some(&path) {
+							self.selected = i;
+							break;
+						}
 					}
+					if self.selected == self.editors.len() {
+						if let Some(editor) =
+							Editor::open_file(self.clipboard.clone(), path.canonicalize().unwrap())
+						{
+							self.editors.push(editor);
+						} else {
+							return;
+						}
+					}
+					self.open_selected();
 				}
 			}
 		}

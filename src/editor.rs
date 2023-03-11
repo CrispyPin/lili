@@ -93,6 +93,10 @@ impl Editor {
 		"untitled".into()
 	}
 
+	pub fn path(&self) -> Option<&PathBuf> {
+		self.path.as_ref()
+	}
+
 	pub fn has_unsaved_changes(&self) -> bool {
 		self.unsaved_changes
 	}
@@ -240,7 +244,7 @@ impl Editor {
 			self.cursor.line -= 1;
 			self.cursor.column = self.current_line().len();
 		}
-		self.scroll_to_cursor()
+		self.scroll_to_cursor();
 	}
 
 	fn move_right(&mut self) {
@@ -250,7 +254,7 @@ impl Editor {
 			self.cursor.line += 1;
 			self.cursor.column = 0;
 		}
-		self.scroll_to_cursor()
+		self.scroll_to_cursor();
 	}
 
 	fn move_up(&mut self, lines: usize) {
