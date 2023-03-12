@@ -211,9 +211,7 @@ impl Navigator {
 				self.path = new_path;
 				self.selected = self.editors.len();
 			}
-			Err(err) => {
-				self.message(format!("Could not navigate to directory: {err}"));
-			}
+			Err(err) => self.message(format!("Could not navigate to directory: {err}")),
 		}
 	}
 

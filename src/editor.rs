@@ -447,8 +447,10 @@ impl Editor {
 	}
 
 	fn save(&mut self) {
+		let mut filename_new = false;
 		if self.path.is_none() {
 			self.path = read_line("Enter path: ").map(|s| env::current_dir().unwrap().join(s));
+			filename_new = true;
 		}
 		if let Some(path) = &self.path {
 			match File::create(path) {
@@ -459,7 +461,9 @@ impl Editor {
 				}
 				Err(e) => {
 					self.message(format!("Could not save file as '{}': {e}", path.display()));
-					self.path = None;
+					if filename_new {
+						self.path = None;
+					}
 				}
 			}
 		}
