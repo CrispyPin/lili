@@ -29,6 +29,7 @@ pub struct Editor {
 	path: Option<PathBuf>,
 	active: bool,
 	unsaved_changes: bool,
+	message: Option<String>,
 }
 
 #[derive(Debug)]
@@ -53,6 +54,7 @@ impl Editor {
 			path: Some(path),
 			active: false,
 			unsaved_changes: false,
+			message: None,
 		})
 	}
 
@@ -67,6 +69,7 @@ impl Editor {
 			path: None,
 			active: false,
 			unsaved_changes: true,
+			message: None,
 		}
 	}
 
@@ -81,6 +84,7 @@ impl Editor {
 			path: Some(path),
 			active: false,
 			unsaved_changes: true,
+			message: None,
 		}
 	}
 
@@ -107,6 +111,7 @@ impl Editor {
 
 		while self.active {
 			self.draw();
+			self.message = None;
 			self.input();
 		}
 	}
@@ -229,12 +234,21 @@ impl Editor {
 
 	fn status_line(&self) {
 		queue!(stdout(), MoveTo(0, terminal::size().unwrap().1)).unwrap();
-		print!(
-			"({},{}) {}",
-			self.cursor.line,
-			self.physical_column(),
-			self.name(),
-		);
+
+		if let Some(message) = &self.message {
+			print!("{message}");
+		} else {
+			print!(
+				"({},{}) {}",
+				self.cursor.line,
+				self.physical_column(),
+				self.name(),
+			);
+		}
+	}
+
+	fn message(&mut self, text: String) {
+		self.message = Some(text);
 	}
 
 	fn move_left(&mut self) {
@@ -438,6 +452,7 @@ impl Editor {
 			.unwrap()
 	}
 
+	/// where the cursor is rendered in the terminal output
 	fn physical_column(&self) -> usize {
 		let start = self.current_line().start;
 		let end = self.char_index();
@@ -449,13 +464,19 @@ impl Editor {
 	fn save(&mut self) {
 		if self.path.is_none() {
 			self.path = read_line("Enter path: ").map(|s| env::current_dir().unwrap().join(s));
-			if self.path.is_none() {
-				return;
+		}
+		if let Some(path) = &self.path {
+			match File::create(path) {
+				Ok(mut file) => {
+					file.write_all(self.text.as_bytes()).unwrap();
+					self.unsaved_changes = false;
+				}
+				Err(e) => {
+					self.message(format!("Could not save file as '{}': {e}", path.display()));
+					self.path = None;
+				}
 			}
 		}
-		let mut file = File::create(self.path.as_ref().unwrap()).unwrap();
-		file.write_all(self.text.as_bytes()).unwrap();
-		self.unsaved_changes = false;
 	}
 }
 
