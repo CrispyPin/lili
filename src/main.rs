@@ -171,15 +171,12 @@ impl Navigator {
 			let i = self.selected - self.editors.len();
 			if i == 0 {
 				if let Some(parent) = self.path.parent() {
-					self.path = parent.to_owned();
-					env::set_current_dir(&self.path).unwrap();
+					self.set_path(self.path.join(parent));
 				}
 			} else {
 				let path = &self.files[i];
 				if path.is_dir() {
-					self.path = self.path.join(path);
-					env::set_current_dir(&self.path).unwrap();
-					self.selected = self.editors.len();
+					self.set_path(self.path.join(path));
 				} else if path.is_file() {
 					let path = path.canonicalize().unwrap();
 					let mut editor_index = self.editors.len();
@@ -204,6 +201,18 @@ impl Navigator {
 					self.selected = editor_index;
 					self.open_selected();
 				}
+			}
+		}
+	}
+
+	fn set_path(&mut self, new_path: PathBuf) {
+		match env::set_current_dir(&new_path) {
+			Ok(()) => {
+				self.path = new_path;
+				self.selected = self.editors.len();
+			}
+			Err(err) => {
+				self.message(format!("Could not navigate to directory: {err}"));
 			}
 		}
 	}
