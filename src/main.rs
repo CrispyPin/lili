@@ -4,7 +4,7 @@ use crossterm::{
 	execute, queue,
 	style::{Color, Colors, ResetColor, SetColors},
 	terminal::{
-		disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
+		self, disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
 		LeaveAlternateScreen,
 	},
 };
@@ -33,6 +33,7 @@ struct Navigator {
 	path: PathBuf,
 	init_path: PathBuf,
 	immediate_open: bool,
+	message: Option<String>,
 }
 
 impl Navigator {
@@ -49,7 +50,7 @@ impl Navigator {
 				path = arg.canonicalize().unwrap();
 				break;
 			} else if arg.is_file() {
-				if let Some(editor) = Editor::open_file(clipboard.clone(), arg) {
+				if let Ok(editor) = Editor::open_file(clipboard.clone(), arg) {
 					editors.push(editor);
 				}
 			} else {
@@ -68,6 +69,7 @@ impl Navigator {
 			init_path: path.clone(),
 			path,
 			immediate_open,
+			message: None,
 		}
 	}
 
@@ -82,6 +84,7 @@ impl Navigator {
 		loop {
 			self.get_files();
 			self.draw();
+			self.message = None;
 			self.input();
 		}
 	}
@@ -123,6 +126,11 @@ impl Navigator {
 			queue!(stdout(), ResetColor).unwrap();
 		}
 
+		if let Some(text) = &self.message {
+			queue!(stdout(), MoveTo(0, terminal::size().unwrap().1)).unwrap();
+			print!("{text}");
+		}
+
 		stdout().flush().unwrap();
 	}
 
@@ -142,6 +150,10 @@ impl Navigator {
 				_ => (),
 			}
 		}
+	}
+
+	fn message(&mut self, text: String) {
+		self.message = Some(text);
 	}
 
 	fn nav_up(&mut self) {
@@ -170,22 +182,26 @@ impl Navigator {
 					self.selected = self.editors.len();
 				} else if path.is_file() {
 					let path = path.canonicalize().unwrap();
-					self.selected = self.editors.len();
+					let mut editor_index = self.editors.len();
 					for (i, editor) in self.editors.iter().enumerate() {
 						if editor.path() == Some(&path) {
-							self.selected = i;
+							editor_index = i;
 							break;
 						}
 					}
-					if self.selected == self.editors.len() {
-						if let Some(editor) =
-							Editor::open_file(self.clipboard.clone(), path.canonicalize().unwrap())
-						{
-							self.editors.push(editor);
-						} else {
-							return;
+					if editor_index == self.editors.len() {
+						match Editor::open_file(
+							self.clipboard.clone(),
+							path.canonicalize().unwrap(),
+						) {
+							Ok(editor) => self.editors.push(editor),
+							Err(err) => {
+								self.message(format!("Could not open file: {err}"));
+								return;
+							}
 						}
 					}
+					self.selected = editor_index;
 					self.open_selected();
 				}
 			}

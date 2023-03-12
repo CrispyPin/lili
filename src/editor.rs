@@ -42,9 +42,9 @@ struct Cursor {
 type Line = Range<usize>;
 
 impl Editor {
-	pub fn open_file(clipboard: Clipboard, path: PathBuf) -> Option<Self> {
-		let text = fs::read_to_string(&path).ok()?;
-		Some(Editor {
+	pub fn open_file(clipboard: Clipboard, path: PathBuf) -> std::io::Result<Self> {
+		let text = fs::read_to_string(&path)?;
+		Ok(Editor {
 			text,
 			lines: Vec::new(),
 			scroll: 0,
