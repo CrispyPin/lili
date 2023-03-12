@@ -58,7 +58,7 @@ impl Editor {
 		})
 	}
 
-	pub fn new_empty(clipboard: Clipboard) -> Self {
+	pub fn new(clipboard: Clipboard, path: Option<PathBuf>) -> Self {
 		Editor {
 			text: String::new(),
 			lines: vec![0..0],
@@ -66,22 +66,7 @@ impl Editor {
 			cursor: Cursor { line: 0, column: 0 },
 			marker: None,
 			clipboard,
-			path: None,
-			active: false,
-			unsaved_changes: true,
-			message: None,
-		}
-	}
-
-	pub fn new_named(clipboard: Clipboard, path: PathBuf) -> Self {
-		Editor {
-			text: String::new(),
-			lines: vec![0..0],
-			scroll: 0,
-			cursor: Cursor { line: 0, column: 0 },
-			marker: None,
-			clipboard,
-			path: Some(path),
+			path,
 			active: false,
 			unsaved_changes: true,
 			message: None,
@@ -468,6 +453,7 @@ impl Editor {
 		if let Some(path) = &self.path {
 			match File::create(path) {
 				Ok(mut file) => {
+					self.message(format!("Saved file as '{}'", path.display()));
 					file.write_all(self.text.as_bytes()).unwrap();
 					self.unsaved_changes = false;
 				}

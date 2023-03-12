@@ -53,11 +53,11 @@ impl Navigator {
 					editors.push(editor);
 				}
 			} else {
-				editors.push(Editor::new_named(clipboard.clone(), arg));
+				editors.push(Editor::new(clipboard.clone(), Some(arg)));
 			}
 		}
 		if args.is_empty() {
-			editors.push(Editor::new_empty(clipboard.clone()));
+			editors.push(Editor::new(clipboard.clone(), None));
 		}
 		let immediate_open = editors.len() == 1;
 		Self {
@@ -200,7 +200,7 @@ impl Navigator {
 
 	fn new_editor(&mut self) {
 		self.selected = self.editors.len();
-		self.editors.push(Editor::new_empty(self.clipboard.clone()));
+		self.editors.push(Editor::new(self.clipboard.clone(), None));
 		self.open_selected();
 	}
 
