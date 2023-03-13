@@ -167,41 +167,44 @@ impl Navigator {
 	fn enter(&mut self) {
 		if self.selected < self.editors.len() {
 			self.editors[self.selected].enter();
-		} else {
-			let i = self.selected - self.editors.len();
-			if i == 0 {
-				if let Some(parent) = self.path.parent() {
-					self.set_path(self.path.join(parent));
-				}
-			} else {
-				let path = &self.files[i];
-				if path.is_dir() {
-					self.set_path(self.path.join(path));
-				} else if path.is_file() {
-					let path = path.canonicalize().unwrap();
-					let mut editor_index = self.editors.len();
-					for (i, editor) in self.editors.iter().enumerate() {
-						if editor.path() == Some(&path) {
-							editor_index = i;
-							break;
-						}
-					}
-					if editor_index == self.editors.len() {
-						match Editor::open_file(
-							self.clipboard.clone(),
-							path.canonicalize().unwrap(),
-						) {
-							Ok(editor) => self.editors.push(editor),
-							Err(err) => {
-								self.message(format!("Could not open file: {err}"));
-								return;
-							}
-						}
-					}
-					self.selected = editor_index;
-					self.open_selected();
+			return;
+		}
+
+		let i = self.selected - self.editors.len();
+		// top entry is hardcoded to be ../
+		if i == 0 {
+			if let Some(parent) = self.path.parent() {
+				self.set_path(self.path.join(parent));
+			}
+			return;
+		}
+
+		let path = &self.files[i];
+		if path.is_dir() {
+			self.set_path(self.path.join(path));
+			return;
+		}
+		if path.is_file() {
+			let path = path.canonicalize().unwrap();
+			let mut selected = self.editors.len();
+			for (i, editor) in self.editors.iter().enumerate() {
+				if editor.path() == Some(&path) {
+					selected = i;
+					break;
 				}
 			}
+			// no editor exists with this path
+			if selected == self.editors.len() {
+				match Editor::open_file(self.clipboard.clone(), path) {
+					Ok(editor) => self.editors.push(editor),
+					Err(err) => {
+						self.message(format!("Could not open file: {err}"));
+						return;
+					}
+				}
+			}
+			self.selected = selected;
+			self.open_selected();
 		}
 	}
 
