@@ -279,17 +279,10 @@ impl Editor {
 	}
 
 	fn scroll_to_cursor(&mut self) {
-		// while self.cursor.line < self.scroll {
-		// 	self.scroll -= 1;
-		// }
-		// while self.cursor.line > (self.scroll + terminal::size().unwrap().1 as usize - 2) {
-		// 	self.scroll += 1;
-		// }
-		self.scroll = self.scroll.min(self.cursor.line);
 		let height = terminal::size().unwrap().1 as usize - 2;
 		self.scroll = self
 			.scroll
-			.max(self.scroll + self.cursor.line.saturating_sub(self.scroll + height));
+			.clamp(self.cursor.line.saturating_sub(height), self.cursor.line);
 	}
 
 	fn move_home(&mut self) {
