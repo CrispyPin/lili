@@ -13,7 +13,7 @@ use std::{
 	vec,
 };
 
-use crate::clipboard::Clipboard;
+use crate::config::Config;
 use crate::util::{color_highlight, color_reset, read_line};
 
 const TAB_SIZE: usize = 4;
@@ -24,7 +24,6 @@ pub struct Editor {
 	scroll: usize,
 	cursor: Cursor,
 	marker: Option<usize>,
-	clipboard: Clipboard,
 	path: Option<PathBuf>,
 	active: bool,
 	unsaved_changes: bool,
@@ -41,7 +40,7 @@ struct Cursor {
 type Line = Range<usize>;
 
 impl Editor {
-	pub fn open_file(clipboard: Clipboard, path: PathBuf) -> std::io::Result<Self> {
+	pub fn open_file(path: PathBuf) -> std::io::Result<Self> {
 		let text = fs::read_to_string(&path)?;
 		Ok(Editor {
 			text,
@@ -49,7 +48,6 @@ impl Editor {
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
 			marker: None,
-			clipboard,
 			path: Some(path),
 			active: false,
 			unsaved_changes: false,
@@ -57,14 +55,13 @@ impl Editor {
 		})
 	}
 
-	pub fn new(clipboard: Clipboard, path: Option<PathBuf>) -> Self {
+	pub fn new(path: Option<PathBuf>) -> Self {
 		Editor {
 			text: String::new(),
 			lines: vec![0..0],
 			scroll: 0,
 			cursor: Cursor { line: 0, column: 0 },
 			marker: None,
-			clipboard,
 			path,
 			active: false,
 			unsaved_changes: true,
@@ -90,18 +87,18 @@ impl Editor {
 		self.path.as_ref()
 	}
 
-	pub fn enter(&mut self) {
+	pub fn enter(&mut self, config: &mut Config) {
 		self.active = true;
 		self.find_lines();
 
 		while self.active {
-			self.draw();
+			self.draw(config);
 			self.message = None;
-			self.input();
+			self.input(config);
 		}
 	}
 
-	fn input(&mut self) {
+	fn input(&mut self, config: &mut Config) {
 		if let Ok(Event::Key(event)) = event::read() {
 			if self.input_movement(&event) {
 				return;
@@ -122,9 +119,10 @@ impl Editor {
 				},
 				KeyModifiers::CONTROL => match event.code {
 					KeyCode::Char('s') => self.save(),
-					KeyCode::Char('c') => self.copy(),
-					KeyCode::Char('x') => self.cut(),
-					KeyCode::Char('v') => self.paste(),
+					KeyCode::Char('c') => self.copy(config),
+					KeyCode::Char('x') => self.cut(config),
+					KeyCode::Char('v') => self.paste(config),
+					KeyCode::Char('l') => config.line_numbers = !config.line_numbers,
 					_ => (),
 				},
 				_ => (),
@@ -157,7 +155,7 @@ impl Editor {
 		true
 	}
 
-	fn draw(&self) {
+	fn draw(&self, config: &Config) {
 		queue!(stdout(), Clear(ClearType::All)).unwrap();
 
 		let max_rows = terminal::size().unwrap().1 as usize - 1;
@@ -166,10 +164,17 @@ impl Editor {
 
 		let selection = self.selection().unwrap_or_default();
 
+		let line_number_width = self.lines.len().to_string().len();
+
 		for (line_index, line) in self.lines[visible_rows].iter().enumerate() {
 			let text = &self.text[line.clone()];
 
 			queue!(stdout(), MoveTo(0, line_index as u16)).unwrap();
+
+			if config.line_numbers {
+				let line_num = line_index + self.scroll + 1;
+				print!("{line_num:line_number_width$} ");
+			}
 
 			let mut in_selection = false;
 			for (i, char) in text.char_indices() {
@@ -192,10 +197,15 @@ impl Editor {
 			color_reset();
 		}
 		self.status_line();
+		let cursor_offset = if config.line_numbers {
+			line_number_width + 1
+		} else {
+			0
+		};
 		queue!(
 			stdout(),
 			MoveTo(
-				self.physical_column() as u16,
+				(self.physical_column() + cursor_offset) as u16,
 				(self.cursor.line - self.scroll) as u16
 			),
 			cursor::Show,
@@ -212,15 +222,15 @@ impl Editor {
 			print!("{message}");
 		} else {
 			print!(
-				"({},{}) {}",
-				self.cursor.line,
+				"[{}, {}] {}",
+				self.cursor.line + 1,
 				self.physical_column(),
 				self.title(),
 			);
 		}
 	}
 
-	fn message(&mut self, text: String) {
+	fn set_message(&mut self, text: String) {
 		self.message = Some(text);
 	}
 
@@ -351,16 +361,16 @@ impl Editor {
 		self.selection().unwrap_or(self.current_line().clone())
 	}
 
-	fn copy(&mut self) {
+	fn copy(&mut self, config: &mut Config) {
 		let range = self.selection_or_line();
 		let mut text = self.text[range].to_owned();
 		if self.marker.is_none() {
 			text += "\n";
 		}
-		self.clipboard.set(text);
+		config.set_clipboard(text);
 	}
 
-	fn cut(&mut self) {
+	fn cut(&mut self, config: &mut Config) {
 		let range = self.selection_or_line();
 		let start = range.start;
 		let mut end = range.end;
@@ -370,19 +380,19 @@ impl Editor {
 			end += 1;
 		}
 		end = end.min(self.text.len());
-		self.clipboard.set(text);
+		config.set_clipboard(text);
 		self.text = self.text[..start].to_owned() + &self.text[end..];
 		self.find_lines();
 		self.move_to_byte(start);
 		self.marker = None;
 	}
 
-	fn paste(&mut self) {
+	fn paste(&mut self, config: &Config) {
 		self.unsaved_changes = true;
 		let cursor = self.char_index();
-		let new_text = self.clipboard.get();
+		let new_text = config.clipboard();
 		let end_pos = cursor + new_text.len();
-		self.text.insert_str(cursor, &new_text);
+		self.text.insert_str(cursor, new_text);
 		self.find_lines();
 		self.move_to_byte(end_pos);
 		self.marker = None;
@@ -430,12 +440,12 @@ impl Editor {
 		if let Some(path) = &self.path {
 			match File::create(path) {
 				Ok(mut file) => {
-					self.message(format!("Saved file as '{}'", path.display()));
+					self.set_message(format!("Saved file as '{}'", path.display()));
 					file.write_all(self.text.as_bytes()).unwrap();
 					self.unsaved_changes = false;
 				}
 				Err(e) => {
-					self.message(format!("Could not save file as '{}': {e}", path.display()));
+					self.set_message(format!("Could not save file as '{}': {e}", path.display()));
 					if filename_new {
 						self.path = None;
 					}

@@ -7,7 +7,7 @@ use crossterm::{
 };
 use std::io::{stdout, Write};
 
-pub fn read_yes_no(prompt: &str, default: bool) -> bool {
+pub fn ask_yes_no(prompt: &str, default: bool) -> bool {
 	let options = if default { "Y/n" } else { "y/N" };
 	let prompt = format!("{prompt} [{options}]: ");
 	match read_line(&prompt).and_then(|s| s.chars().next()) {

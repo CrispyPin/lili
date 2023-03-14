@@ -15,19 +15,19 @@ use std::{
 	process::exit,
 };
 
-mod clipboard;
+mod config;
 mod editor;
 mod util;
-use clipboard::Clipboard;
+use config::Config;
 use editor::Editor;
-use util::{color_highlight, color_reset, read_yes_no};
+use util::{ask_yes_no, color_highlight, color_reset};
 
 fn main() {
 	Navigator::new().run();
 }
 
 struct Navigator {
-	clipboard: Clipboard,
+	config: Config,
 	editors: Vec<Editor>,
 	files: Vec<PathBuf>,
 	selected: usize,
@@ -40,11 +40,8 @@ struct Navigator {
 
 impl Navigator {
 	fn new() -> Self {
-		let clipboard = Clipboard::new();
 		let mut editors = Vec::new();
-
 		let args: Vec<String> = env::args().skip(1).collect();
-
 		let mut path = env::current_dir().unwrap();
 
 		for arg in args.iter().map(PathBuf::from) {
@@ -52,19 +49,19 @@ impl Navigator {
 				path = arg.canonicalize().unwrap();
 				break;
 			} else if arg.is_file() {
-				if let Ok(editor) = Editor::open_file(clipboard.clone(), arg) {
+				if let Ok(editor) = Editor::open_file(arg) {
 					editors.push(editor);
 				}
 			} else {
-				editors.push(Editor::new(clipboard.clone(), Some(arg)));
+				editors.push(Editor::new(Some(arg)));
 			}
 		}
 		if args.is_empty() {
-			editors.push(Editor::new(clipboard.clone(), None));
+			editors.push(Editor::new(None));
 		}
 		let immediate_open = editors.len() == 1;
 		Self {
-			clipboard,
+			config: Config::new(),
 			editors,
 			selected: 0,
 			files: Vec::new(),
@@ -214,7 +211,7 @@ impl Navigator {
 			}
 			// no editor exists with this path
 			if selected == self.editors.len() {
-				match Editor::open_file(self.clipboard.clone(), path) {
+				match Editor::open_file(path) {
 					Ok(editor) => self.editors.push(editor),
 					Err(err) => {
 						self.message(format!("Could not open file: {err}"));
@@ -240,13 +237,13 @@ impl Navigator {
 	fn open_selected(&mut self) {
 		if self.selected < self.editors.len() {
 			self.scroll = 0;
-			self.editors[self.selected].enter();
+			self.editors[self.selected].enter(&mut self.config);
 		}
 	}
 
 	fn new_editor(&mut self) {
 		self.selected = self.editors.len();
-		self.editors.push(Editor::new(self.clipboard.clone(), None));
+		self.editors.push(Editor::new(None));
 		self.open_selected();
 	}
 
@@ -272,10 +269,8 @@ impl Navigator {
 	}
 
 	fn quit(&self) {
-		if self.any_unsaved() {
-			if !read_yes_no("Unsaved changes, quit anyway?", false) {
-				return;
-			}
+		if self.any_unsaved() && !ask_yes_no("Unsaved changes, quit anyway?", false) {
+			return;
 		}
 		disable_raw_mode().unwrap();
 		execute!(stdout(), LeaveAlternateScreen, cursor::Show).unwrap();
