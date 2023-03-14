@@ -130,36 +130,27 @@ impl Editor {
 
 	/// Cursor movement logic, returns true if cursor moved (so consider the event consumed in that case)
 	fn input_movement(&mut self, event: &KeyEvent) -> bool {
-		if let KeyCode::Left
-		| KeyCode::Right
-		| KeyCode::Up
-		| KeyCode::Down
-		| KeyCode::Home
-		| KeyCode::PageUp
-		| KeyCode::PageDown
-		| KeyCode::End = event.code
-		{
-			if event.modifiers.contains(KeyModifiers::SHIFT) {
-				self.set_marker();
-			} else {
-				self.marker = None;
-			}
-			let height = terminal::size().unwrap().1 as usize;
-			match event.code {
-				KeyCode::Left => self.move_left(),
-				KeyCode::Right => self.move_right(),
-				KeyCode::Up => self.move_up(1),
-				KeyCode::Down => self.move_down(1),
-				KeyCode::PageUp => self.move_up(height),
-				KeyCode::PageDown => self.move_down(height),
-				KeyCode::Home => self.move_home(),
-				KeyCode::End => self.move_end(),
-				_ => (),
-			}
-			true
-		} else {
-			false
+		let prev_pos = self.char_index();
+		let height = terminal::size().unwrap().1 as usize;
+		match event.code {
+			KeyCode::Left => self.move_left(),
+			KeyCode::Right => self.move_right(),
+			KeyCode::Up => self.move_up(1),
+			KeyCode::Down => self.move_down(1),
+			KeyCode::PageUp => self.move_up(height),
+			KeyCode::PageDown => self.move_down(height),
+			KeyCode::Home => self.move_home(),
+			KeyCode::End => self.move_end(),
+			_ => return false,
 		}
+		if event.modifiers.contains(KeyModifiers::SHIFT) {
+			if self.marker.is_none() {
+				self.marker = Some(prev_pos);
+			}
+		} else {
+			self.marker = None;
+		}
+		true
 	}
 
 	fn draw(&self) {
@@ -293,12 +284,6 @@ impl Editor {
 				self.cursor.line = line_index;
 				self.cursor.column = pos - line.start;
 			}
-		}
-	}
-
-	fn set_marker(&mut self) {
-		if self.marker.is_none() {
-			self.marker = Some(self.char_index());
 		}
 	}
 
