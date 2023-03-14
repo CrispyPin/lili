@@ -34,6 +34,7 @@ struct Navigator {
 	init_path: PathBuf,
 	immediate_open: bool,
 	message: Option<String>,
+	scroll: usize,
 }
 
 impl Navigator {
@@ -70,6 +71,7 @@ impl Navigator {
 			path,
 			immediate_open,
 			message: None,
+			scroll: 0,
 		}
 	}
 
@@ -108,10 +110,14 @@ impl Navigator {
 
 		let offset = self.editors.len() as u16 + 2;
 		queue!(stdout(), MoveTo(0, offset)).unwrap();
-
 		print!("Current dir: {}", self.path.to_string_lossy());
-		for (index, path) in self.files.iter().enumerate() {
-			if index == self.selected.wrapping_sub(self.editors.len()) {
+
+		let max_rows = terminal::size().unwrap().1 as usize - self.editors.len() - 4;
+		let end = (self.scroll + max_rows).min(self.files.len());
+		let visible_rows = self.scroll..end;
+
+		for (index, path) in self.files[visible_rows].iter().enumerate() {
+			if index + self.scroll == self.selected.wrapping_sub(self.editors.len()) {
 				queue!(stdout(), SetColors(Colors::new(Color::Black, Color::White))).unwrap();
 			}
 			queue!(stdout(), MoveTo(1, index as u16 + 1 + offset)).unwrap();
@@ -157,16 +163,32 @@ impl Navigator {
 	}
 
 	fn nav_up(&mut self) {
-		self.selected = self.selected.saturating_sub(1);
+		if self.selected > 0 {
+			self.selected -= 1;
+		} else {
+			let selected_max = self.editors.len() + self.files.len();
+			self.selected = selected_max - 1;
+		}
+		self.update_scroll();
 	}
 
 	fn nav_down(&mut self) {
-		self.selected = (self.selected + 1).min(self.editors.len() + self.files.len() - 1);
+		let selected_max = self.editors.len() + self.files.len();
+		self.selected = (self.selected + 1) % selected_max;
+		self.update_scroll();
+	}
+
+	fn update_scroll(&mut self) {
+		let height = terminal::size().unwrap().1 as usize - self.editors.len() - 5;
+		let selected_file = self.selected.saturating_sub(self.editors.len());
+		self.scroll = self
+			.scroll
+			.clamp(selected_file.saturating_sub(height), selected_file);
 	}
 
 	fn enter(&mut self) {
 		if self.selected < self.editors.len() {
-			self.editors[self.selected].enter();
+			self.open_selected();
 			return;
 		}
 
@@ -220,6 +242,7 @@ impl Navigator {
 
 	fn open_selected(&mut self) {
 		if self.selected < self.editors.len() {
+			self.scroll = 0;
 			self.editors[self.selected].enter();
 		}
 	}
