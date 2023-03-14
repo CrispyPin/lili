@@ -2,7 +2,6 @@ use crossterm::{
 	cursor::{self, MoveTo},
 	event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
 	queue,
-	style::{Color, Colors, ResetColor, SetColors},
 	terminal::{self, Clear, ClearType},
 };
 use std::{
@@ -15,7 +14,7 @@ use std::{
 };
 
 use crate::clipboard::Clipboard;
-use crate::util::read_line;
+use crate::util::{color_highlight, color_reset, read_line};
 
 const TAB_SIZE: usize = 4;
 
@@ -186,7 +185,7 @@ impl Editor {
 				for (i, char) in text.char_indices() {
 					let char_i = line.start + i;
 					if char_i >= selection.start && char_i <= selection.end && !in_selection {
-						color_selection();
+						color_highlight();
 						in_selection = true;
 					} else if char_i > selection.end && in_selection {
 						color_reset();
@@ -458,12 +457,4 @@ impl Editor {
 			}
 		}
 	}
-}
-
-fn color_selection() {
-	queue!(stdout(), SetColors(Colors::new(Color::Black, Color::White))).unwrap();
-}
-
-fn color_reset() {
-	queue!(stdout(), ResetColor).unwrap();
 }

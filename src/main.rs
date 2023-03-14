@@ -2,7 +2,6 @@ use crossterm::{
 	cursor::{self, MoveTo},
 	event::{self, Event, KeyCode, KeyModifiers},
 	execute, queue,
-	style::{Color, Colors, ResetColor, SetColors},
 	terminal::{
 		self, disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen,
 		LeaveAlternateScreen,
@@ -18,6 +17,7 @@ use std::{
 mod clipboard;
 mod editor;
 mod util;
+use crate::util::{color_highlight, color_reset};
 use clipboard::Clipboard;
 use editor::Editor;
 
@@ -97,11 +97,11 @@ impl Navigator {
 
 		for (index, editor) in self.editors.iter().enumerate() {
 			if index == self.selected {
-				queue!(stdout(), SetColors(Colors::new(Color::Black, Color::White))).unwrap();
+				color_highlight();
 			}
 			queue!(stdout(), MoveTo(1, index as u16 + 1)).unwrap();
 			print!("{}", editor.title());
-			queue!(stdout(), ResetColor).unwrap();
+			color_reset();
 		}
 
 		let offset = self.editors.len() as u16 + 2;
@@ -114,7 +114,7 @@ impl Navigator {
 
 		for (index, path) in self.files[visible_rows].iter().enumerate() {
 			if index + self.scroll == self.selected.wrapping_sub(self.editors.len()) {
-				queue!(stdout(), SetColors(Colors::new(Color::Black, Color::White))).unwrap();
+				color_highlight();
 			}
 			queue!(stdout(), MoveTo(1, index as u16 + 1 + offset)).unwrap();
 			if let Some(name) = path.file_name() {
@@ -125,7 +125,7 @@ impl Navigator {
 			if path.is_dir() {
 				print!("/");
 			}
-			queue!(stdout(), ResetColor).unwrap();
+			color_reset();
 		}
 
 		if let Some(text) = &self.message {

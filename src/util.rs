@@ -1,7 +1,9 @@
 use crossterm::{
 	cursor,
 	event::{self, Event, KeyCode},
-	queue, terminal,
+	queue,
+	style::{Color, Colors, ResetColor, SetColors},
+	terminal,
 };
 use std::io::{stdout, Write};
 
@@ -36,4 +38,12 @@ pub fn read_line(prompt: &str) -> Option<String> {
 		stdout().flush().unwrap();
 	}
 	Some(response.trim().into())
+}
+
+pub fn color_highlight() {
+	queue!(stdout(), SetColors(Colors::new(Color::Black, Color::White))).unwrap();
+}
+
+pub fn color_reset() {
+	queue!(stdout(), ResetColor).unwrap();
 }
