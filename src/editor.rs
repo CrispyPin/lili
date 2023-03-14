@@ -169,36 +169,32 @@ impl Editor {
 		let end = (self.scroll + max_rows).min(self.lines.len());
 		let visible_rows = self.scroll..end;
 
-		let cursor = self.char_index();
-		let marker = self.marker.unwrap_or(0);
-		let selection = (marker.min(cursor))..(marker.max(cursor));
+		let selection = self.selection().unwrap_or_default();
 
 		for (line_index, line) in self.lines[visible_rows].iter().enumerate() {
 			let text = &self.text[line.clone()];
 
 			queue!(stdout(), MoveTo(0, line_index as u16)).unwrap();
 
-			if self.marker.is_none() {
-				print!("{}", text.replace('\t', &" ".repeat(TAB_SIZE)));
-			} else {
-				let mut in_selection = false;
-				for (i, char) in text.char_indices() {
-					let char_i = line.start + i;
-					if char_i >= selection.start && char_i <= selection.end && !in_selection {
+			let mut in_selection = false;
+			for (i, char) in text.char_indices() {
+				let char_i = line.start + i;
+				if selection.contains(&char_i) {
+					if !in_selection {
 						color_highlight();
 						in_selection = true;
-					} else if char_i > selection.end && in_selection {
-						color_reset();
-						in_selection = false;
 					}
-					if char == '\t' {
-						print!("{:1$}", " ", TAB_SIZE);
-					} else {
-						print!("{char}");
-					}
+				} else if in_selection {
+					color_reset();
+					in_selection = false;
 				}
-				color_reset();
+				if char == '\t' {
+					print!("{:1$}", " ", TAB_SIZE);
+				} else {
+					print!("{char}");
+				}
 			}
+			color_reset();
 		}
 		self.status_line();
 		queue!(
@@ -207,7 +203,8 @@ impl Editor {
 				self.physical_column() as u16,
 				(self.cursor.line - self.scroll) as u16
 			),
-			cursor::Show
+			cursor::Show,
+			cursor::SetCursorStyle::BlinkingBar
 		)
 		.unwrap();
 		stdout().flush().unwrap();
