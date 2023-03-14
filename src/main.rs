@@ -100,11 +100,7 @@ impl Navigator {
 				queue!(stdout(), SetColors(Colors::new(Color::Black, Color::White))).unwrap();
 			}
 			queue!(stdout(), MoveTo(1, index as u16 + 1)).unwrap();
-			print!(
-				"{}{}",
-				editor.has_unsaved_changes().then_some("*").unwrap_or(" "),
-				editor.name()
-			);
+			print!("{}", editor.title());
 			queue!(stdout(), ResetColor).unwrap();
 		}
 

@@ -73,21 +73,18 @@ impl Editor {
 		}
 	}
 
-	pub fn name(&self) -> String {
+	pub fn title(&self) -> String {
 		if let Some(path) = &self.path {
 			if let Some(name) = path.file_name() {
-				return name.to_string_lossy().to_string();
+				let decorator = if self.unsaved_changes { "*" } else { " " };
+				return format!("{}{}", decorator, name.to_string_lossy());
 			}
 		}
-		"untitled".into()
+		"*untitled".into()
 	}
 
 	pub fn path(&self) -> Option<&PathBuf> {
 		self.path.as_ref()
-	}
-
-	pub fn has_unsaved_changes(&self) -> bool {
-		self.unsaved_changes
 	}
 
 	pub fn enter(&mut self) {
@@ -227,7 +224,7 @@ impl Editor {
 				"({},{}) {}",
 				self.cursor.line,
 				self.physical_column(),
-				self.name(),
+				self.title(),
 			);
 		}
 	}
