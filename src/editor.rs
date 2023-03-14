@@ -82,6 +82,10 @@ impl Editor {
 		"*untitled".into()
 	}
 
+	pub fn is_unsaved(&self) -> bool {
+		self.unsaved_changes
+	}
+
 	pub fn path(&self) -> Option<&PathBuf> {
 		self.path.as_ref()
 	}

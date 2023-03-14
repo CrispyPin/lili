@@ -7,6 +7,16 @@ use crossterm::{
 };
 use std::io::{stdout, Write};
 
+pub fn read_yes_no(prompt: &str, default: bool) -> bool {
+	let options = if default { "Y/n" } else { "y/N" };
+	let prompt = format!("{prompt} [{options}]: ");
+	match read_line(&prompt).and_then(|s| s.chars().next()) {
+		Some('Y' | 'y') => true,
+		Some('N' | 'n') => false,
+		_ => default,
+	}
+}
+
 pub fn read_line(prompt: &str) -> Option<String> {
 	let mut response = String::new();
 	let size = terminal::size().unwrap();

@@ -17,9 +17,9 @@ use std::{
 mod clipboard;
 mod editor;
 mod util;
-use crate::util::{color_highlight, color_reset};
 use clipboard::Clipboard;
 use editor::Editor;
+use util::{color_highlight, color_reset, read_yes_no};
 
 fn main() {
 	Navigator::new().run();
@@ -257,7 +257,16 @@ impl Navigator {
 		}
 	}
 
+	fn any_unsaved(&self) -> bool {
+		self.editors.iter().any(Editor::is_unsaved)
+	}
+
 	fn quit(&self) {
+		if self.any_unsaved() {
+			if !read_yes_no("Unsaved changes, quit anyway?", false) {
+				return;
+			}
+		}
 		disable_raw_mode().unwrap();
 		execute!(stdout(), LeaveAlternateScreen, cursor::Show).unwrap();
 		exit(0);
