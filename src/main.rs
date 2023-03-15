@@ -8,7 +8,6 @@ use crossterm::{
 	},
 };
 use std::{
-	cmp::Ordering,
 	env, fs,
 	io::{stdout, Write},
 	path::PathBuf,
@@ -254,13 +253,9 @@ impl Navigator {
 			self.files.push(file.path());
 		}
 		self.files[1..].sort_unstable_by(|path, other| {
-			if path.is_dir() == other.is_dir() {
-				path.cmp(other)
-			} else if path.is_dir() {
-				Ordering::Less
-			} else {
-				Ordering::Greater
-			}
+			let by_type = path.is_file().cmp(&other.is_file());
+			let by_name = path.cmp(other);
+			by_type.then(by_name)
 		});
 	}
 

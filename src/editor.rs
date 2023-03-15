@@ -10,7 +10,6 @@ use std::{
 	io::{stdout, Write},
 	ops::Range,
 	path::PathBuf,
-	vec,
 };
 
 use crate::config::Config;
@@ -18,6 +17,7 @@ use crate::util::{color_highlight, color_reset, read_line};
 
 const TAB_SIZE: usize = 4;
 
+#[derive(Debug, Default)]
 pub struct Editor {
 	text: String,
 	lines: Vec<Line>,
@@ -30,7 +30,7 @@ pub struct Editor {
 	message: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Cursor {
 	line: usize,
 	column: usize,
@@ -44,28 +44,15 @@ impl Editor {
 		let text = fs::read_to_string(&path)?;
 		Ok(Editor {
 			text,
-			lines: Vec::new(),
-			scroll: 0,
-			cursor: Cursor { line: 0, column: 0 },
-			marker: None,
 			path: Some(path),
-			active: false,
-			unsaved_changes: false,
-			message: None,
+			..Default::default()
 		})
 	}
 
 	pub fn new(path: Option<PathBuf>) -> Self {
 		Editor {
-			text: String::new(),
-			lines: vec![0..0],
-			scroll: 0,
-			cursor: Cursor { line: 0, column: 0 },
-			marker: None,
 			path,
-			active: false,
-			unsaved_changes: true,
-			message: None,
+			..Default::default()
 		}
 	}
 
@@ -76,7 +63,7 @@ impl Editor {
 				return format!("{}{}", decorator, name.to_string_lossy());
 			}
 		}
-		"*untitled".into()
+		"*<untitled>".into()
 	}
 
 	pub fn is_unsaved(&self) -> bool {
