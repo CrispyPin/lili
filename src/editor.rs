@@ -109,6 +109,7 @@ impl Editor {
 					KeyCode::Char('c') => self.copy(config),
 					KeyCode::Char('x') => self.cut(config),
 					KeyCode::Char('v') => self.paste(config),
+					KeyCode::Char('g') => self.go_to_line(),
 					KeyCode::Char('l') => config.line_numbers = !config.line_numbers,
 					_ => (),
 				},
@@ -437,6 +438,20 @@ impl Editor {
 						self.path = None;
 					}
 				}
+			}
+		}
+	}
+
+	fn go_to_line(&mut self) {
+		let max = self.lines.len();
+		let prompt = format!("Go to line (1-{max}): ");
+		if let Some(target) = read_line(&prompt).and_then(|t| t.parse::<usize>().ok()) {
+			if (1..=max).contains(&target) {
+				self.cursor.line = target - 1;
+				self.cursor.column = 0;
+				self.scroll_to_cursor();
+			} else {
+				self.set_message(format!("Line {target} not in range 1-{max}"));
 			}
 		}
 	}

@@ -105,7 +105,8 @@ impl Navigator {
 		queue!(stdout(), MoveTo(0, offset)).unwrap();
 		print!("Current dir: {}", self.path.to_string_lossy());
 
-		let max_rows = terminal::size().unwrap().1 as usize - self.editors.len() - 4;
+		let height = terminal::size().unwrap().1;
+		let max_rows = height as usize - self.editors.len() - 4;
 		let end = (self.scroll + max_rows).min(self.files.len());
 		let visible_rows = self.scroll..end;
 
@@ -117,7 +118,7 @@ impl Navigator {
 			if let Some(name) = path.file_name() {
 				print!("{}", name.to_string_lossy());
 			} else {
-				print!("{}", path.to_string_lossy());
+				print!("..");
 			}
 			if path.is_dir() {
 				print!("/");
@@ -126,7 +127,7 @@ impl Navigator {
 		}
 
 		if let Some(text) = &self.message {
-			queue!(stdout(), MoveTo(0, terminal::size().unwrap().1)).unwrap();
+			queue!(stdout(), MoveTo(0, height)).unwrap();
 			print!("{text}");
 		}
 
