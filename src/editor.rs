@@ -6,8 +6,9 @@ use crossterm::{
 };
 use std::{
 	env,
+	fmt::Display,
 	fs::{self, File},
-	io::{stdout, Write},
+	io::{self, stdout, Write},
 	ops::Range,
 	path::PathBuf,
 };
@@ -37,10 +38,18 @@ struct Cursor {
 	// target_column: usize,
 }
 
+#[derive(Debug)]
+enum Error {
+	WritingToFile(io::Error),
+	CreatingFile(PathBuf, io::Error),
+	CurrentDir,
+}
+type EditorResult = Result<(), Error>;
+
 type Line = Range<usize>;
 
 impl Editor {
-	pub fn open_file(path: PathBuf) -> std::io::Result<Self> {
+	pub fn open_file(path: PathBuf) -> io::Result<Self> {
 		let text = fs::read_to_string(&path)?;
 		Ok(Editor {
 			text,
@@ -80,15 +89,15 @@ impl Editor {
 
 		while self.active {
 			self.draw(config);
-			self.message = None;
-			self.input(config);
+			self.input(config)
+				.unwrap_or_else(|e| self.message = Some(format!("Error: {e}")));
 		}
 	}
 
-	fn input(&mut self, config: &mut Config) {
+	fn input(&mut self, config: &mut Config) -> EditorResult {
 		if let Ok(Event::Key(event)) = event::read() {
 			if self.input_movement(&event) {
-				return;
+				return Ok(());
 			}
 			match event.modifiers {
 				KeyModifiers::NONE => match event.code {
@@ -105,7 +114,7 @@ impl Editor {
 					_ => (),
 				},
 				KeyModifiers::CONTROL => match event.code {
-					KeyCode::Char('s') => self.save(),
+					KeyCode::Char('s') => self.save()?,
 					KeyCode::Char('c') => self.copy(config),
 					KeyCode::Char('x') => self.cut(config),
 					KeyCode::Char('v') => self.paste(config),
@@ -116,6 +125,7 @@ impl Editor {
 				_ => (),
 			}
 		}
+		Ok(())
 	}
 
 	/// Cursor movement logic, returns true if cursor moved (so consider the event consumed in that case)
@@ -143,7 +153,7 @@ impl Editor {
 		true
 	}
 
-	fn draw(&self, config: &Config) {
+	fn draw(&mut self, config: &Config) {
 		queue!(stdout(), Clear(ClearType::All)).unwrap();
 
 		let max_rows = terminal::size().unwrap().1 as usize - 1;
@@ -203,11 +213,12 @@ impl Editor {
 		stdout().flush().unwrap();
 	}
 
-	fn status_line(&self) {
+	fn status_line(&mut self) {
 		queue!(stdout(), MoveTo(0, terminal::size().unwrap().1)).unwrap();
 
 		if let Some(message) = &self.message {
 			print!("{message}");
+			self.message = None;
 		} else {
 			print!(
 				"[{}, {}] {}",
@@ -300,7 +311,7 @@ impl Editor {
 	}
 
 	fn current_line(&self) -> &Line {
-		self.lines.get(self.cursor.line).unwrap()
+		&self.lines[self.cursor.line]
 	}
 
 	fn find_lines(&mut self) {
@@ -419,27 +430,22 @@ impl Editor {
 		preceding_chars + preceding_tabs * (TAB_SIZE - 1)
 	}
 
-	fn save(&mut self) {
-		let mut filename_new = false;
-		if self.path.is_none() {
-			self.path = read_line("Enter path: ").map(|s| env::current_dir().unwrap().join(s));
-			filename_new = true;
-		}
-		if let Some(path) = &self.path {
-			match File::create(path) {
-				Ok(mut file) => {
-					self.set_message(format!("Saved file as '{}'", path.display()));
-					file.write_all(self.text.as_bytes()).unwrap();
-					self.unsaved_changes = false;
-				}
-				Err(e) => {
-					self.set_message(format!("Could not save file as '{}': {e}", path.display()));
-					if filename_new {
-						self.path = None;
-					}
-				}
-			}
-		}
+	fn save(&mut self) -> EditorResult {
+		let cwd = env::current_dir().map_err(|_| Error::CurrentDir)?;
+		let Some(path) = self.path
+			.clone()
+			.or_else(|| read_line("Enter path: ")
+				.map(|s| cwd.join(s))
+			) else { return Ok(()); };
+
+		let mut file = File::create(&path).map_err(|e| Error::CreatingFile(path.to_owned(), e))?;
+		file.write_all(self.text.as_bytes())
+			.map_err(Error::WritingToFile)?;
+
+		self.set_message(format!("Saved file as '{}'", path.display()));
+		self.path = Some(path);
+		self.unsaved_changes = false;
+		Ok(())
 	}
 
 	fn go_to_line(&mut self) {
@@ -454,5 +460,16 @@ impl Editor {
 				self.set_message(format!("Line {target} not in range 1-{max}"));
 			}
 		}
+	}
+}
+
+impl Display for Error {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let text = match self {
+			Error::CreatingFile(name, err) => format!("Could not create {name:?}: {err}"),
+			Error::CurrentDir => "Could not get current directory".into(),
+			Error::WritingToFile(err) => format!("{err}"),
+		};
+		f.write_str(&text)
 	}
 }

@@ -229,6 +229,7 @@ impl Navigator {
 			Ok(()) => {
 				self.path = new_path;
 				self.selected = self.editors.len();
+				self.scroll = 0;
 			}
 			Err(err) => self.message(format!("Could not navigate to directory: {err}")),
 		}
